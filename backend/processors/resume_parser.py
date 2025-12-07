@@ -1,7 +1,7 @@
 import re
 from readers.pdf_reader import read_pdf
 from readers.docx_reader import read_docx
-from utils.text_cleaning import clean_text
+from processors.text_cleaner import clean_text
 
 
 
