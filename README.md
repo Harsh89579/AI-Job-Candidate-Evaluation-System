@@ -57,7 +57,7 @@ The AI Job Candidate Evaluation System is a comprehensive, AI-powered platform d
    Open your browser and navigate to `http://localhost:8000` to use the platform.
 
 ## Screenshots
-*(Add screenshots of the Resume Analyzer Dashboard, Skill Gap Roadmap, and AI Live Interview interface here.)*
+
 
 ## Future Improvements
 - Integrate a full Streamlit dashboard for deeper analytics.
