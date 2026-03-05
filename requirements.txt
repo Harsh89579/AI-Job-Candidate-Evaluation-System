@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+pypdf
+python-docx
+nltk
+scikit-learn
+pandas
+jinja2
+requests
+reportlab
+pydantic
+google-genai
+python-dotenv
