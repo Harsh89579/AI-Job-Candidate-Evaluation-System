@@ -39,8 +39,21 @@ class SkillGapResponse(BaseModel):
 class InterviewQuestionsResponse(BaseModel):
     questions: list[str]
 
+class ResumeFeedbackResponse(BaseModel):
+    strong_skills: list[str]
+    weak_skills: list[str]
+    improvement_suggestions: list[str]
+    project_recommendations: list[str]
+
+class AnswerEvaluation(BaseModel):
+    question: str
+    answer: str
+    score: int  # 0-10
+    feedback: str
+
 class InterviewEvaluationResponse(BaseModel):
-    score: int
+    overall_score: int
+    answer_evaluations: list[AnswerEvaluation]
     rationale: str
     feedback: str
 
@@ -101,25 +114,43 @@ def generate_interview_questions(role: str, extracted_skills: list[str]) -> list
     return result.questions
 
 
+def generate_resume_feedback(role: str, extracted_text: str) -> dict:
+    """Analyze resume and provide improvement suggestions"""
+    prompt = f"""
+    You are an expert tech recruiter specializing in hiring for '{role}'.
+    
+    Analyze the following resume text and provide:
+    1. Strong skills detected.
+    2. Missing or weak skills based on role standards.
+    3. Specific suggestions to improve the resume (formatting, content, phrasing).
+    4. Recommendations for projects or specific experiences that would boost this candidate's profile.
+    
+    Resume Text:
+    {extracted_text[:4000]} 
+    
+    Provide your evaluation in a clear, professional JSON format.
+    """
+    result = _generate_structured_content(prompt, ResumeFeedbackResponse)
+    return result.model_dump()
+
+
 def evaluate_interview(role: str, questions: list[str], answers: list[str]) -> dict:
-    """Evaluate candidate answers and score 0-100"""
+    """Evaluate candidate answers and provide detailed per-answer feedback"""
     qa_pairs = ""
     for idx, (q, a) in enumerate(zip(questions, answers)):
         qa_pairs += f"Q{idx+1}: {q}\nCandidate Answer: {a}\n\n"
         
     prompt = f"""
-    You are a strict technical hiring manager evaluating an interview for a '{role}'.
+    You are a technical hiring manager evaluating an interview for a '{role}'.
     
-    Evaluate the following Q&A transcript based on:
-    - Technical Depth
-    - Relevance to the question
-    - Clarity of communication
+    Evaluate each of the following Q&A pairs. For EACH pair, provide:
+    - A score from 0 to 10.
+    - Specific feedback on the answer.
+    
+    Also provide an overall interview score (0-100), a rationale for the overall score, and general actionable feedback.
     
     Transcript:
     {qa_pairs}
-    
-    Provide an integer score from 0-100 representing their overall performance.
-    Provide a brief rationale for the score, and 1 short sentence of actionable feedback.
     """
     result = _generate_structured_content(prompt, InterviewEvaluationResponse)
     return result.model_dump()

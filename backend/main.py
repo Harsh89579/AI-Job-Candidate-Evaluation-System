@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Body
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Body, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import StreamingResponse
@@ -20,13 +20,15 @@ from utils.text_processing import preprocess_text
 from utils.skills_extractor import extract_skills
 from utils.ml_utils import predict_suitability, load_model
 from utils.role_skills import get_missing_skills
-from utils.interview_utils import generate_improvement_roadmap, generate_interview_questions, evaluate_interview
+from utils.interview_utils import generate_improvement_roadmap, generate_interview_questions, evaluate_interview, generate_resume_feedback
 from pydantic import BaseModel
 import shutil
 
 from fastapi.middleware.gzip import GZipMiddleware
+from backend.auth import router as auth_router, get_current_user
 
 app = FastAPI(title="Resume Analyzer API")
+app.include_router(auth_router)
 
 # Add GZip compression for faster responses
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -81,12 +83,21 @@ class InterviewRequest(BaseModel):
 class EvaluationRequest(BaseModel):
     role: str
     resume_score: float
+    skill_match_score: float
     questions: list[str]
     answers: list[str]
 
 @app.get("/")
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/login")
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/signup")
+async def signup_page(request: Request):
+    return templates.TemplateResponse("signup.html", {"request": request})
 
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
@@ -114,7 +125,7 @@ async def upload_resume(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/analyze_resume")
-async def analyze_resume(role: str = Form(...), file: UploadFile = File(...)):
+async def analyze_resume(role: str = Form(...), file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """
     Endpoint to fully analyze the uploaded resume tailored to a specific role.
     """
@@ -172,6 +183,18 @@ async def analyze_resume(role: str = Form(...), file: UploadFile = File(...)):
             
         # 5. Get missing skills based on role selection
         missing_skills = get_missing_skills(role, skills)
+
+        # 6. Generate AI Resume Feedback (New)
+        try:
+            feedback_data = await asyncio.to_thread(generate_resume_feedback, role, raw_text)
+        except Exception as e:
+            logger.error(f"Failed to generate resume feedback: {e}")
+            feedback_data = {
+                "strong_skills": [],
+                "weak_skills": [],
+                "improvement_suggestions": ["Could not generate feedback at this time."],
+                "project_recommendations": []
+            }
             
         logger.info(f"Successfully analyzed {file.filename} -> {decision} ({score}/100)")
         
@@ -181,6 +204,7 @@ async def analyze_resume(role: str = Form(...), file: UploadFile = File(...)):
             "confidence": f"{confidence}%",
             "skills": skills,
             "missing_skills": missing_skills,
+            "feedback": feedback_data,
             "preview_text": preview_text
         }
 
@@ -193,7 +217,7 @@ async def analyze_resume(role: str = Form(...), file: UploadFile = File(...)):
 # ---- LLM Integration Routes ----
 
 @app.post("/skill_gap_analysis")
-async def skill_gap_analysis(req: SkillGapRequest):
+async def skill_gap_analysis(req: SkillGapRequest, current_user: dict = Depends(get_current_user)):
     """Generate roadmap via LLM for failing candidates"""
     try:
         roadmap = await asyncio.to_thread(generate_improvement_roadmap, req.role, req.missing_skills)
@@ -204,7 +228,7 @@ async def skill_gap_analysis(req: SkillGapRequest):
 
 
 @app.post("/start_interview")
-async def start_interview(req: InterviewRequest):
+async def start_interview(req: InterviewRequest, current_user: dict = Depends(get_current_user)):
     """Generate interview questions via LLM for passing candidates"""
     try:
         questions = await asyncio.to_thread(generate_interview_questions, req.role, req.extracted_skills)
@@ -215,47 +239,73 @@ async def start_interview(req: InterviewRequest):
 
 
 @app.post("/evaluate_interview")
-async def evaluate_interview_endpoint(req: EvaluationRequest):
-    """Evaluate answers and compute final combined score"""
+async def evaluate_interview_endpoint(req: EvaluationRequest, current_user: dict = Depends(get_current_user)):
+    """Evaluate answers and compute final combined score using 30/30/40 split"""
     try:
-        evaluation = await asyncio.to_thread(evaluate_interview, req.role, req.questions, req.answers)
+        results = await asyncio.to_thread(evaluate_interview, req.role, req.questions, req.answers)
         
-        interview_score = evaluation["score"]
+        # 1. Resume Quality Score (from req.resume_score) - 30%
+        # 2. Skill Match Score (from req.skill_match_score) - 30%
+        # 3. Interview Performance (from results["overall_score"]) - 40%
         
-        # Final Score = (Resume Score * 0.4) + (Interview Score * 0.6)
-        final_score = round((req.resume_score * 0.4) + (interview_score * 0.6), 2)
+        interview_score = results["overall_score"]
+        
+        # Calculate Final Weighted Score (0-100)
+        final_score = round(
+            (req.resume_score * 0.3) + 
+            (req.skill_match_score * 0.3) + 
+            (interview_score * 0.4), 
+            2
+        )
         
         if final_score >= 80:
-            decision = "Selected"
+            decision = "Strong Hire"
         elif final_score >= 60:
-            decision = "Hold"
+            decision = "Potential Hire"
         else:
-            decision = "Rejected"
+            decision = "Needs Improvement"
             
         return {
+            "resume_score": req.resume_score,
+            "skill_match_score": req.skill_match_score,
             "interview_score": interview_score,
             "final_score": final_score,
             "decision": decision,
-            "rationale": evaluation["rationale"],
-            "feedback": evaluation["feedback"]
+            "rationale": results["rationale"],
+            "feedback": results["feedback"],
+            "answer_evaluations": results["answer_evaluations"]
         }
     except Exception as e:
         logger.error(f"Error evaluating interview: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate_report")
-async def generate_report(data: dict = Body(...)):
+async def generate_report(data: dict = Body(...), current_user: dict = Depends(get_current_user)):
     """
-    Generates a PDF report dynamically based on the analysis results.
+    Generates a comprehensive PDF report dynamically based on the full evaluation results.
     """
     try:
-        score = data.get("resume_score", 0)
+        name = data.get("candidate_name", "Candidate")
+        role = data.get("role", "N/A")
+        
+        # Scores
+        resume_score = data.get("resume_score", 0)
+        skill_match_score = data.get("skill_match_score", 0)
+        interview_score = data.get("interview_score", 0)
+        final_score = data.get("final_score", 0)
+        
         prediction = data.get("prediction", "N/A")
+        decision = data.get("decision", "N/A")
         confidence = data.get("confidence", "N/A")
         skills = data.get("skills", [])
         
-        # Determine Color Based on Prediction
-        primary_color = colors.HexColor("#10b981") if prediction == "Suitable" else colors.HexColor("#ef4444")
+        # Determine Color Based on Hiring Recommendation
+        if decision == "Strong Hire":
+            primary_color = colors.HexColor("#10b981") # Success Green
+        elif decision == "Potential Hire":
+            primary_color = colors.HexColor("#f59e0b") # Warning Orange
+        else:
+            primary_color = colors.HexColor("#ef4444") # Error Red
         
         buffer = io.BytesIO()
         c = canvas.Canvas(buffer, pagesize=letter)
@@ -264,48 +314,69 @@ async def generate_report(data: dict = Body(...)):
         # Header
         c.setFont("Helvetica-Bold", 24)
         c.setFillColor(colors.HexColor("#1e3a8a"))
-        c.drawString(50, height - 70, "HR Resume Analysis Report")
+        c.drawString(50, height - 70, "Candidate Evaluation Report")
         
         # Underline
         c.setStrokeColor(colors.HexColor("#3b82f6"))
         c.setLineWidth(2)
         c.line(50, height - 80, width - 50, height - 80)
         
-        # Results Section
-        c.setFont("Helvetica-Bold", 14)
+        # Candidate Info
+        c.setFont("Helvetica-Bold", 12)
         c.setFillColor(colors.black)
-        c.drawString(50, height - 120, "Prediction Result:")
+        c.drawString(50, height - 110, f"Candidate Name: {name}")
+        c.drawString(50, height - 130, f"Target Role: {role}")
+        
+        # Scores Section
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, height - 170, "Evaluation Metrics:")
+        
+        c.setFont("Helvetica", 12)
+        c.drawString(70, height - 195, f"Resume Quality Score (30%): {resume_score:.1f} / 100")
+        c.drawString(70, height - 215, f"Skill Match Score (30%): {skill_match_score:.1f} / 100")
+        c.drawString(70, height - 235, f"Interview Performance (40%): {interview_score:.1f} / 100")
+        
+        # Final Score & Recommendation
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(50, height - 275, "Final Assessment:")
         
         c.setFillColor(primary_color)
-        c.drawString(180, height - 120, f"{prediction}")
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(50, height - 305, f"Score: {final_score:.1f} / 100")
+        c.drawString(250, height - 305, f"Result: {decision}")
         
         c.setFillColor(colors.black)
-        c.drawString(50, height - 150, "Resume Score:")
-        c.drawString(180, height - 150, f"{score} / 100")
-        
-        c.drawString(50, height - 180, "AI Confidence:")
-        c.drawString(180, height - 180, f"{confidence}")
+        c.setFont("Helvetica", 12)
+        c.drawString(50, height - 335, f"AI Confidence: {confidence}")
         
         # Skills Section
-        c.drawString(50, height - 230, "Extracted Key Skills:")
-        c.setFont("Helvetica", 12)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(50, height - 380, "Extracted Technical Skills:")
+        c.setFont("Helvetica", 11)
         
-        y_pos = height - 250
+        y_pos = height - 405
         if skills:
+            # Display skills in columns
+            col = 0
             for skill in skills:
-                c.drawString(70, y_pos, f"• {skill.capitalize()}")
-                y_pos -= 20
-                if y_pos < 50:
+                c.drawString(70 + (col * 150), y_pos, f"• {skill}")
+                col += 1
+                if col > 2:
+                    col = 0
+                    y_pos -= 20
+                if y_pos < 100:
                     c.showPage()
                     y_pos = height - 50
-                    c.setFont("Helvetica", 12)
+                    c.setFont("Helvetica", 11)
+            y_pos -= 30
         else:
             c.drawString(70, y_pos, "No key technical skills identified.")
-        
+            y_pos -= 30
+            
         # Footer
         c.setFont("Helvetica-Oblique", 10)
         c.setFillColor(colors.gray)
-        c.drawString(50, 30, "Generated automatically by AI HR Platform")
+        c.drawString(50, 30, f"Generated automatically by HRVision AI System on {os.popen('date /t').read().strip()}")
             
         c.save()
         buffer.seek(0)
@@ -313,8 +384,11 @@ async def generate_report(data: dict = Body(...)):
         return StreamingResponse(
             buffer, 
             media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=Analysis_Report.pdf"}
+            headers={"Content-Disposition": f"attachment; filename={name.replace(' ', '_')}_Evaluation_Report.pdf"}
         )
+    except Exception as e:
+        logger.error(f"Failed to generate PDF report: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate report")
     except Exception as e:
         logger.error(f"Failed to generate PDF report: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate report")

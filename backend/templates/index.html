@@ -1,338 +1,381 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR Resume Analyzer | SaaS Platform</title>
+    <title>HRVision AI | Premium Candidate Evaluation</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/static/css/styles.css">
-    <!-- Font Awesome for Icons -->
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
-
-    <!-- Subtle animated background -->
     <div class="bg-animation"></div>
 
     <div class="app-container">
-        <!-- Toast Notification Container -->
-        <div id="toastContainer" class="toast-container"></div>
-
-        <!-- Header -->
-        <header class="app-header">
-            <div class="logo">
-                <i class="fa-solid fa-briefcase"></i>
-                <h1>HR<span>Vision</span></h1>
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fa-solid fa-shapes"></i>
+                    <h1>HR<span>Vision</span></h1>
+                </div>
             </div>
-
-            <!-- SPA Navigation Tabs -->
-            <nav class="spa-nav" id="spaNav">
-                <button class="nav-btn active" data-target="resumeSection">
-                    <i class="fa-solid fa-file-magnifying-glass"></i> Analyzer
+            <nav class="sidebar-nav" id="sidebarNav">
+                <button class="nav-link active" data-target="dashboardHome">
+                    <i class="fa-brands fa-microsoft"></i> Dashboard
                 </button>
-                <button class="nav-btn disabled" data-target="skillGapSection" id="navSkillGap" disabled>
-                    <i class="fa-solid fa-arrow-trend-up"></i> Skill Gap
+                <button class="nav-link" data-target="resumeSection">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload Resume
                 </button>
-                <button class="nav-btn disabled" data-target="interviewSection" id="navInterview" disabled>
-                    <i class="fa-solid fa-headset"></i> AI Interview
+                <button class="nav-link disabled" data-target="analysisDetailSection" id="navAnalysis" disabled>
+                    <i class="fa-solid fa-chart-column"></i> Analytics
+                </button>
+                <button class="nav-link disabled" data-target="skillGapSection" id="navSkillGap" disabled>
+                    <i class="fa-solid fa-route"></i> Skill Roadmap
+                </button>
+                <button class="nav-link disabled" data-target="interviewSection" id="navInterview" disabled>
+                    <i class="fa-solid fa-robot"></i> AI Interview
                 </button>
             </nav>
-
-            <div class="header-nav">
-                <span class="user-profile"><i class="fa-solid fa-user-circle"></i> Recruiter Portal</span>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-
-            <div class="content-wrapper">
-
-                <!-- NEW: Workflow Stepper -->
-                <div class="workflow-stepper">
-                    <div class="step-item active" id="step-upload">
-                        <div class="step-circle"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-                        <span>Upload</span>
+            <div class="p-6" style="border-top: 1px solid var(--glass-border);">
+                <div class="flex items-center gap-4">
+                    <div class="user-profile-circle">
+                        <div class="avatar"><i class="fa-solid fa-user"></i></div>
                     </div>
-                    <div class="step-item" id="step-analyze">
-                        <div class="step-circle"><i class="fa-solid fa-wand-sparkles"></i></div>
-                        <span>Analyze</span>
-                    </div>
-                    <div class="step-item" id="step-action">
-                        <div class="step-circle"><i class="fa-solid fa-bolt"></i></div>
-                        <span>Action</span>
+                    <div class="flex-col" style="overflow: hidden;">
+                        <span style="font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" id="userNameDisplay">Admin Space</span>
+                        <span style="font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" id="userEmailDisplay">Pro Plan</span>
                     </div>
                 </div>
-
-                <!-- PAGE 1: Resume Analyzer -->
-                <div id="resumeSection" class="page-section active">
-                    <div class="content-wrapper">
-                        <!-- Left Column: Upload Section -->
-                        <section class="upload-section glass-card">
-                            <h2><i class="fa-solid fa-cloud-arrow-up"></i> Analyze Candidate</h2>
-                            <p class="subtitle">Upload a resume (.pdf, .docx) to evaluate candidate suitability based on
-                                AI analysis of skills, education, and experience.</p>
-
-                            <form id="uploadForm">
-                                <!-- Role Selection -->
-                                <div class="role-selector mb-4">
-                                    <label for="roleSelect"><i class="fa-solid fa-user-tie"></i> Target Role:</label>
-                                    <select id="roleSelect" name="role" required class="glass-input">
-                                        <option value="" disabled selected>Select a role...</option>
-                                        <option value="Data Scientist">Data Scientist</option>
-                                        <option value="Backend Developer">Backend Developer</option>
-                                        <option value="Frontend Developer">Frontend Developer</option>
-                                        <option value="DevOps Engineer">DevOps Engineer</option>
-                                        <option value="ML Engineer">ML Engineer</option>
-                                    </select>
-                                </div>
-
-                                <div class="drop-zone" id="dropZone">
-                                    <i class="fa-solid fa-file-arrow-up drop-icon"></i>
-                                    <p class="drop-text">Drag & drop candidate resume here</p>
-                                    <p class="drop-subtext">or</p>
-                                    <label for="fileInput" class="browse-btn">Browse Files</label>
-                                    <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
-                                </div>
-
-                                <!-- File Preview -->
-                                <div class="file-preview hidden" id="filePreview">
-                                    <i class="fa-solid fa-file-pdf file-icon"></i>
-                                    <span class="file-name" id="fileName">No file selected</span>
-                                    <button type="button" class="remove-file" id="removeFileBtn"><i
-                                            class="fa-solid fa-xmark"></i></button>
-                                </div>
-
-                                <button type="submit" class="submit-btn" id="analyzeBtn" disabled>
-                                    <span class="btn-text">Analyze Candidate</span>
-                                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                </button>
-                            </form>
-
-                            <!-- NEW: Recent Uploads History -->
-                            <div class="history-section mt-4">
-                                <h3 style="font-size: 1rem; color: var(--text-secondary); margin-bottom: 1rem;"><i
-                                        class="fa-solid fa-clock-rotate-left"></i> Recent Candidates</h3>
-                                <div id="historyContainer" class="history-container">
-                                    <!-- History rendered via JS -->
-                                </div>
-                            </div>
-
-                        </section>
-
-                        <!-- Right Column: Results Section -->
-                        <section class="results-section glass-card hidden" id="resultsSection">
-
-                            <!-- Loading Spinner -->
-                            <div class="loader-container hidden" id="loaderContainer">
-                                <div class="spinner"></div>
-                                <p>Our AI is analyzing the candidate...</p>
-                            </div>
-
-                            <!-- Results Content -->
-                            <div class="results-content hidden" id="resultsContent">
-                                <!-- NEW: Skeleton Loader Container (Toggled via JS) -->
-                                <div id="skeletonLoader" class="skeleton-container hidden" style="margin-bottom: 20px;">
-                                    <div class="result-grid mb-4">
-                                        <div class="result-item">
-                                            <div class="skeleton"></div>
-                                        </div>
-                                        <div class="result-item">
-                                            <div class="skeleton"></div>
-                                        </div>
-                                    </div>
-                                    <div class="skeleton-title mt-4"></div>
-                                    <div class="skeleton-text"></div>
-                                    <div class="skeleton-text"></div>
-                                    <div class="skeleton-text"></div>
-                                    <div class="skeleton-title mt-4"></div>
-                                    <div style="display:flex;gap:10px;">
-                                        <div class="skeleton skeleton-badge"></div>
-                                        <div class="skeleton skeleton-badge"></div>
-                                        <div class="skeleton skeleton-badge"></div>
-                                    </div>
-                                </div>
-
-                                <div id="actualResultsData">
-                                    <div class="results-header">
-                                        <h2><i class="fa-solid fa-chart-pie"></i> Analysis Report</h2>
-                                        <button class="download-btn" id="downloadBtn">
-                                            <i class="fa-solid fa-file-pdf"></i> Download PDF Report
-                                        </button>
-                                    </div>
-
-                                    <div class="result-grid">
-
-                                        <!-- Overall Match -->
-                                        <div class="result-item decision-card" id="decisionCard">
-                                            <h3>Decision Recommendation</h3>
-                                            <div class="decision-badge" id="decisionBadge">
-                                                <i class="fa-solid fa-circle-check"></i> Suitable
-                                            </div>
-                                            <p class="confidence-label">AI Confidence: <span
-                                                    id="confidenceValue">0%</span>
-                                            </p>
-                                        </div>
-
-                                        <!-- Score -->
-                                        <div class="result-item score-card">
-                                            <h3>Resume Score</h3>
-                                            <div class="score-display">
-                                                <span class="score-value" id="scoreValue">0</span><span
-                                                    class="score-max">/100</span>
-                                            </div>
-                                            <div class="progress-bar-container">
-                                                <div class="progress-bar" id="scoreBar"></div>
-                                            </div>
-                                            <p class="interpretation-label" id="interpretationLabel">Analyzing...</p>
-                                        </div>
-                                    </div>
-
-                                    <!-- Resume Preview Section -->
-                                    <div class="preview-section result-item mt-4">
-                                        <h3><i class="fa-solid fa-file-lines"></i> Resume Preview Extract</h3>
-                                        <div class="preview-box">
-                                            <p id="previewText">Extracting text...</p>
-                                        </div>
-                                    </div>
-
-                                    <!-- Skills -->
-                                    <div class="skills-section">
-                                        <h3><i class="fa-solid fa-screwdriver-wrench"></i> Extracted Key Skills</h3>
-                                        <div class="skills-container" id="skillsContainer">
-                                            <!-- Skill badges will be injected here -->
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Missing Skills -->
-                                <div class="skills-section mt-4 hidden" id="missingSkillsContainerWrap">
-                                    <h3><i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i> Missing
-                                        Required Skills</h3>
-                                    <div class="skills-container" id="missingSkillsContainer">
-                                    </div>
-                                </div>
-
-                            </div> <!-- End actualResultsData -->
-
-                    </div>
-                    </section>
-                </div>
+                <button id="logoutBtn" class="action-btn secondary mt-4" style="width: 100%; justify-content: center; padding: 8px; border-color: rgba(239, 68, 68, 0.3); color: var(--error);">
+                    <i class="fa-solid fa-right-from-bracket"></i> Logout
+                </button>
             </div>
+        </aside>
 
-            <!-- PAGE 2: Skill Gap & Improvement -->
-            <div id="skillGapSection" class="page-section hidden">
-                <div class="glass-card full-width-card">
-                    <div class="gap-header">
-                        <h2><i class="fa-solid fa-arrow-trend-up"></i> AI Skill Gap Roadmap</h2>
-                        <div class="decision-badge unsuitable" style="width: fit-content; margin-top: 10px;">
-                            <i class="fa-solid fa-circle-xmark"></i> Not Eligible for AI Interview
-                        </div>
-                        <p class="gap-message" id="gapMessage"
-                            style="margin-top:20px; font-size: 1.1rem; color: var(--text-secondary);">Generating
-                            roadmap...</p>
-                    </div>
-
-                    <div class="loader-container hidden" id="gapLoader">
-                        <div class="spinner"></div>
-                        <p>Generating personalized learning roadmap...</p>
-                    </div>
-
-                    <div class="roadmap-container hidden" id="roadmapContainer">
-                        <!-- Roadmap injects here -->
+        <!-- Main Wrapper -->
+        <div class="main-wrapper">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="breadcrumb">
+                    <span style="color: var(--text-dim);">Evaluation /</span> <span id="currentPageTitle" style="color: var(--text-main); font-weight: 600;">Dashboard</span>
+                </div>
+                <div class="header-right flex items-center gap-6">
+                    <button class="action-btn secondary" style="padding: 8px 16px; border-radius: 50px; font-size: 13px;">
+                        <i class="fa-solid fa-bell"></i>
+                    </button>
+                    <div class="system-status">
+                        <span class="status-dot online"></span>
+                        <span class="text-xs">AI Core: Online</span>
                     </div>
                 </div>
-            </div>
+            </header>
+            
+            <div id="toastContainer" class="toast-container"></div>
 
-            <!-- PAGE 3: AI Interview -->
-            <div id="interviewSection" class="page-section hidden">
-                <div class="glass-card full-width-card">
-                    <h2><i class="fa-solid fa-headset"></i> AI Technical Interview</h2>
+            <!-- Main Content Area -->
+            <main class="main-content">
 
-                    <div class="loader-container hidden" id="interviewLoader">
-                        <div class="spinner"></div>
-                        <p>Generating technical questions...</p>
-                    </div>
-
-                    <div class="interview-chat-container hidden" id="interviewChatBox">
-                        <div id="questionsContainer" class="questions-list">
-                            <!-- Questions/Answers inject here -->
-                        </div>
-                    </div>
-
-                    <div class="interview-actions hidden" id="interviewActions"
-                        style="text-align:center; margin-top:20px;">
-                        <button class="submit-btn" id="finishInterviewBtn">
-                            <i class="fa-solid fa-paper-plane"></i> Submit Answers for Evaluation
+                <!-- SECTION: Dashboard Home -->
+                <div id="dashboardHome" class="page-section active animate-fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2>Overview</h2>
+                        <button class="action-btn" id="newAnalysisBtn">
+                            <i class="fa-solid fa-plus"></i> New Analysis
                         </button>
                     </div>
 
-                    <div class="loader-container hidden" id="evaluationLoader">
-                        <div class="spinner"></div>
-                        <p>Evaluating answers...</p>
-                    </div>
-
-                    <!-- Final Evaluation Output -->
-                    <div class="final-evaluation-panel hidden glass-card mt-4" id="finalEvaluationPanel"
-                        style="border: 2px solid var(--primary-color);">
-                        <h3 style="text-align:center; font-size:1.8rem;">Final Hiring Recommendation</h3>
-
-                        <div class="decision-card" style="text-align:center; margin: 20px auto;">
-                            <div class="decision-badge" id="finalDecisionBadge"
-                                style="font-size: 1.5rem; padding: 15px 30px; display:inline-block;">
-                                <!-- Decision -->
+                    <!-- Stats Row -->
+                    <div class="stats-grid">
+                        <div class="tilt-wrapper">
+                            <div class="stat-card glass-card hover-lift">
+                                <div class="stat-icon"><i class="fa-solid fa-star"></i></div>
+                                <div class="stat-info">
+                                    <h3>Suitability</h3>
+                                    <div class="stat-value" id="dashScore">0.0</div>
+                                </div>
                             </div>
                         </div>
-
-                        <div class="result-grid"
-                            style="grid-template-columns: 1fr 1fr 1fr; gap:20px; text-align:center;">
-                            <div class="score-card">
-                                <h4>Resume Score</h4>
-                                <div class="score-display"><span class="score-value" id="finalResumeScore">0</span><span
-                                        class="score-max">/100</span></div>
-                                <small>Weight: 40%</small>
-                            </div>
-                            <div class="score-card">
-                                <h4>Interview Score</h4>
-                                <div class="score-display"><span class="score-value"
-                                        id="finalInterviewScore">0</span><span class="score-max">/100</span></div>
-                                <small>Weight: 60%</small>
-                            </div>
-                            <div class="score-card"
-                                style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
-                                <h4>Combined Score</h4>
-                                <div class="score-display"><span class="score-value"
-                                        id="finalCombinedScore">0</span><span class="score-max">/100</span></div>
-                                <small>Total Final</small>
+                        <div class="tilt-wrapper">
+                            <div class="stat-card glass-card hover-lift">
+                                <div class="stat-icon" style="color: var(--secondary); background: rgba(139, 92, 246, 0.1);"><i class="fa-solid fa-layer-group"></i></div>
+                                <div class="stat-info">
+                                    <h3>Skills Match</h3>
+                                    <div class="stat-value" id="dashSkills">0%</div>
+                                </div>
                             </div>
                         </div>
-
-                        <div class="feedback-box mt-4"
-                            style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px;">
-                            <h4 style="color:var(--text-primary); margin-bottom:10px;"><i
-                                    class="fa-solid fa-comment-dots"></i> AI Rationale & Feedback</h4>
-                            <p id="finalRationale" style="color:var(--text-secondary); line-height:1.6;"></p>
-                            <p id="finalFeedback" style="color:var(--primary-light); font-weight:500; margin-top:10px;">
-                            </p>
+                        <div class="tilt-wrapper">
+                            <div class="stat-card glass-card hover-lift">
+                                <div class="stat-icon" style="color: var(--error); background: rgba(239, 68, 68, 0.1);"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                                <div class="stat-info">
+                                    <h3>Gaps Found</h3>
+                                    <div class="stat-value" id="dashGaps" style="background: var(--error); -webkit-background-clip: text; background-clip: text; color: transparent;">0</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- Charts Row with Donut, Radar, Bar -->
+                    <div class="dashboard-grid">
+                        <div class="glass-card hover-lift">
+                            <div class="card-header">
+                                <h3>Overall Match</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="matchPieChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="glass-card hover-lift">
+                            <div class="card-header">
+                                <h3>Profile Distribution</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="skillRadarChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="glass-card hover-lift">
+                            <div class="card-header">
+                                <h3>Skills Comparison</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="skillsBarChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-        </main>
+                <!-- SECTION: Resume Upload -->
+                <div id="resumeSection" class="page-section hidden animate-fade-in">
+                    <div class="glass-card" style="max-width: 600px; margin: 40px auto; padding: 48px;">
+                        <div class="text-center mb-6">
+                            <div class="ai-pulse mx-auto" style="width: 50px; height: 50px; margin-bottom: 16px;"><i class="fa-solid fa-wand-magic-sparkles" style="color:white; font-size:20px;"></i></div>
+                            <h2>Evaluate Candidate</h2>
+                            <p class="text-secondary mt-2">Upload resume to extract and analyze data instantly.</p>
+                        </div>
+                        
+                        <form id="uploadForm">
+                            <div class="mb-6">
+                                <label style="display: block; font-weight: 500; font-size: 14px; margin-bottom: 8px; color: var(--text-muted);">Target Role</label>
+                                <select id="roleSelect" name="role" required class="glass-input">
+                                    <option value="" disabled selected>Select an engineering role...</option>
+                                    <option value="Data Scientist">Data Scientist</option>
+                                    <option value="Backend Developer">Backend Developer</option>
+                                    <option value="Frontend Developer">Frontend Developer</option>
+                                    <option value="DevOps Engineer">DevOps Engineer</option>
+                                    <option value="ML Engineer">ML Engineer</option>
+                                </select>
+                            </div>
+
+                            <div class="drop-zone hover-lift" id="dropZone">
+                                <div id="uploadProgressOverlay" class="upload-progress-overlay hidden animate-fade-in">
+                                    <span id="progressSpinner" style="font-size: 40px; color: var(--text-muted);"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                                    <div class="progress-bar-container"><div class="progress-bar-fill" id="uploadBar"></div></div>
+                                    <div class="success-checkmark"><i class="fa-solid fa-circle-check"></i></div>
+                                    <p id="progressText" class="mt-4 font-semibold text-white">Uploading securely...</p>
+                                </div>
+
+                                <i class="fa-solid fa-file-arrow-up drop-icon" id="dropIcon"></i>
+                                <h3 style="margin-bottom: 8px;">Drag & Drop</h3>
+                                <p class="text-secondary text-sm">Supports PDF and DOCX</p>
+                                <label for="fileInput" class="action-btn secondary mt-6" style="padding: 10px 20px; font-size: 14px;">Browse Files</label>
+                                <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+                            </div>
+
+                            <div class="glass-card hidden mt-4 flex items-center justify-between p-4" id="filePreview" style="border-radius: 12px; border: 1px solid var(--primary);">
+                                <div class="flex items-center gap-4">
+                                    <i class="fa-solid fa-file-pdf text-error" style="font-size: 24px;"></i>
+                                    <div class="flex-col" style="display: flex; flex-direction: column;">
+                                        <span class="file-name" id="fileName" style="font-weight: 500; font-size: 14px; color: var(--text-main);">document.pdf</span>
+                                        <span id="fileSize" style="font-size: 12px; color: var(--text-dim);">0 KB</span>
+                                    </div>
+                                </div>
+                                <button type="button" id="removeFileBtn" style="background: none; border: none; color: var(--text-muted); cursor: pointer;"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+
+                            <button type="submit" class="action-btn mt-6" style="width: 100%; justify-content: center;" id="analyzeBtn" disabled>
+                                <span>Start Intelligence Engine</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- SECTION: Analysis Details -->
+                <div id="analysisDetailSection" class="page-section hidden animate-fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2>Analytics Report</h2>
+                        <button class="action-btn secondary" id="downloadBtn">
+                            <i class="fa-solid fa-download"></i> Export PDF
+                        </button>
+                    </div>
+
+                    <!-- Loading Screen -->
+                    <div class="ai-loader-container hidden" id="loaderContainer">
+                        <div class="ai-pulse"><i class="fa-solid fa-brain" style="color:white; font-size:24px;"></i></div>
+                        <div class="loading-text">AI is deep-analyzing the resume<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+                    </div>
+
+                    <div class="results-content hidden animate-fade-in" id="resultsContent">
+                        <div class="dashboard-grid">
+                            <!-- Left: Detailed Score -->
+                            <div class="score-card-detailed relative">
+                                <span class="text-xs uppercase" style="color: rgba(255,255,255,0.6); margin-bottom: 8px; font-weight: 600; letter-spacing: 1px;">Overall Match</span>
+                                <div class="score-num" id="scoreValue">0</div>
+                                <div class="suitability-badge mt-4" id="decisionBadge">Analysis Complete</div>
+                                <p class="text-xs mt-4" style="color: rgba(255,255,255,0.6);">AI Confidence: <span id="confidenceValue" style="color: white; font-weight: 600;">0%</span></p>
+                            </div>
+
+                            <!-- Right: Skills Overview -->
+                            <div class="glass-card col-span-2 hover-lift">
+                                <h3 class="mb-4 flex items-center gap-2"><i class="fa-solid fa-microchip text-primary"></i> Skills DNA</h3>
+                                <div class="skills-wrap" id="skillsContainer"></div>
+                                
+                                <div id="missingSkillsContainerWrap" class="hidden mt-6 pt-6" style="border-top: 1px solid var(--glass-border);">
+                                    <h3 class="mb-4 flex items-center gap-2 text-error"><i class="fa-solid fa-triangle-exclamation"></i> Critical Gaps</h3>
+                                    <div class="skills-wrap" id="missingSkillsContainer"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Modular Strategy UI -->
+                        <div id="resumeFeedbackContainer" class="hidden mt-8">
+                            <h2 class="mb-6 flex items-center gap-2"><i class="fa-solid fa-chart-line" style="color: var(--secondary);"></i> Strategic Insights</h2>
+                            <div class="feedback-grid">
+                                <div class="feedback-item success hover-lift" style="border-left: 4px solid var(--success);">
+                                    <h4 class="text-success mb-2">Strengths</h4>
+                                    <ul id="strongSkillsList" class="feedback-list"></ul>
+                                </div>
+                                <div class="feedback-item error hover-lift" style="border-left: 4px solid var(--error);">
+                                    <h4 class="text-error mb-2">Weaknesses</h4>
+                                    <ul id="weakSkillsList" class="feedback-list"></ul>
+                                </div>
+                            </div>
+                            
+                            <div class="dashboard-grid mt-6">
+                                <div class="glass-card col-span-2 hover-lift">
+                                    <h4 class="mb-4"><i class="fa-solid fa-lightbulb" style="color: var(--warning);"></i> Improvements</h4>
+                                    <div class="skills-wrap" id="improvementSuggestionsList" style="flex-direction: column;"></div>
+                                </div>
+                                <div class="glass-card hover-lift">
+                                    <h4 class="mb-4"><i class="fa-solid fa-rocket" style="color: var(--primary);"></i> Recommendations</h4>
+                                    <p id="projectRecommendations" class="text-sm mt-2" style="line-height: 1.6; color: var(--text-muted);"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Typing Container (Terminal look) -->
+                        <div class="glass-card ai-insights-box mt-8 hidden" id="insightsContainerWrap">
+                            <h3 class="mb-4"><i class="fa-solid fa-terminal" style="color: var(--text-dim);"></i> Raw Processing Trace</h3>
+                            <div id="previewText"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION: Skill Gap Timeline -->
+                <div id="skillGapSection" class="page-section hidden animate-fade-in">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2>Upskilling Roadmap</h2>
+                        <button class="action-btn secondary" id="startInterviewFromGap"><i class="fa-solid fa-forward"></i> Skip to Interview</button>
+                    </div>
+
+                    <div class="glass-card" style="max-width: 800px; margin: 0 auto; min-height: 400px;">
+                        <div id="gapLoader" class="hidden ai-loader-container">
+                            <div class="ai-pulse"><i class="fa-solid fa-route" style="color:white;"></i></div>
+                            <div class="loading-text">Generating learning path<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+                        </div>
+
+                        <div id="roadmapContainer" class="timeline-container hidden">
+                            <div class="timeline-progress-line" id="timelineProgress"></div>
+                            <!-- Dynamic Steps -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION: AI Interview -->
+                <div id="interviewSection" class="page-section hidden animate-fade-in">
+                    <h2 class="mb-6">Interactive Assessment</h2>
+
+                    <div class="glass-card" style="max-width: 800px; margin: 0 auto;">
+                        <div id="interviewLoader" class="hidden ai-loader-container">
+                            <div class="ai-pulse"><i class="fa-solid fa-comments" style="color:white;"></i></div>
+                            <div class="loading-text">Initializing AI agent<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+                        </div>
+
+                        <div id="interviewChatBox" class="hidden">
+                            <div id="questionsContainer" class="flex-col gap-6"></div>
+                            <div id="interviewActions" class="mt-8 flex justify-center hidden">
+                                <button id="finishInterviewBtn" class="action-btn" style="width: 100%; justify-content: center;">
+                                    <i class="fa-solid fa-paper-plane"></i> Submit Evaluation
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="evaluationLoader" class="hidden ai-loader-container">
+                            <div class="ai-pulse"><i class="fa-solid fa-calculator" style="color:white;"></i></div>
+                            <div class="loading-text">Computing final decision matrix<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+                        </div>
+
+                        <div id="finalEvaluationPanel" class="hidden animate-fade-in mt-4">
+                            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                                <div class="tilt-wrapper">
+                                    <div class="stat-card glass-card hover-lift flex-col justify-center items-center text-center p-6">
+                                        <span class="text-xs uppercase text-secondary font-semibold">Resume</span>
+                                        <h2 id="finalResumeScore" class="text-primary mt-2" style="font-size: 40px; line-height: 1;">0</h2>
+                                    </div>
+                                </div>
+                                <div class="tilt-wrapper">
+                                    <div class="stat-card glass-card hover-lift flex-col justify-center items-center text-center p-6">
+                                        <span class="text-xs uppercase text-secondary font-semibold">Interview</span>
+                                        <h2 id="finalInterviewScore" class="mt-2" style="font-size: 40px; color: var(--accent); line-height: 1;">0</h2>
+                                    </div>
+                                </div>
+                                <div class="tilt-wrapper">
+                                    <div class="stat-card glass-card hover-lift flex-col justify-center items-center text-center p-6" style="background: rgba(16, 185, 129, 0.05);">
+                                        <span class="text-xs uppercase text-success font-semibold">Final Score</span>
+                                        <h2 id="finalCombinedScore" class="text-success mt-2" style="font-size: 40px; line-height: 1;">0</h2>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="glass-card mt-6" style="border-top: 4px solid var(--primary);">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3>Final Decision</h3>
+                                    <div id="finalDecisionBadge" class="suitability-badge SELECTED text-success">SELECTED</div>
+                                </div>
+                                <h4 class="mt-6 mb-2 text-primary text-sm uppercase" style="letter-spacing: 1px;">Rationale</h4>
+                                <p id="finalRationale" class="text-secondary text-sm"></p>
+                                <h4 class="mt-6 mb-2 text-warning text-sm uppercase" style="letter-spacing: 1px;">Candidate Feedback</h4>
+                                <p id="finalFeedback" class="text-secondary text-sm"></p>
+                            </div>
+
+                            <div class="mt-8 mb-4">
+                                <h3 class="mb-4">Response Breakdown</h3>
+                                <div id="interviewEvalDetails" class="flex-col gap-4"></div>
+                            </div>
+
+                            <div class="flex justify-center mt-8">
+                                <button id="startNewEvalBtn" class="action-btn secondary">
+                                    <i class="fa-solid fa-rotate-right"></i> Start Over
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
     </div>
 
     <!-- Custom JS -->
     <script src="/static/js/app.js"></script>
 </body>
-
 </html>

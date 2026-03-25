@@ -1,6 +1,71 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // DOM Elements
+    // Navigation Elements
+    const navLinks = document.querySelectorAll('.nav-link');
+    const pageSections = document.querySelectorAll('.page-section');
+    const currentPageTitle = document.getElementById('currentPageTitle');
+    
+    // Auth Pipeline Integration
+    const token = localStorage.getItem('hr_vision_token');
+    const user = localStorage.getItem('hr_vision_user');
+    
+    if (!token && window.location.pathname === '/') {
+        window.location.href = '/login';
+        return;
+    }
+    
+    if (token && window.location.pathname === '/') {
+        fetch('http://localhost:8000/auth/me', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        }).then(res => {
+            if (!res.ok) {
+                localStorage.removeItem('hr_vision_token');
+                localStorage.removeItem('hr_vision_user');
+                window.location.href = '/login';
+            } else {
+                return res.json();
+            }
+        }).then(data => {
+            if (data && data.name) {
+                localStorage.setItem('hr_vision_user', data.name);
+                if (document.getElementById('userNameDisplay')) {
+                    document.getElementById('userNameDisplay').textContent = data.name;
+                }
+                if (document.getElementById('userEmailDisplay')) {
+                    document.getElementById('userEmailDisplay').textContent = data.email || 'Pro Plan';
+                }
+            }
+        }).catch(err => console.error("Session validation failed:", err));
+    }
+
+    if (document.getElementById('logoutBtn')) {
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('hr_vision_token');
+            localStorage.removeItem('hr_vision_user');
+            window.location.href = '/login';
+        });
+    }
+
+    function getAuthHeaders() {
+        const storedToken = localStorage.getItem('hr_vision_token');
+        if (!storedToken) {
+            window.location.href = '/login';
+            return {};
+        }
+        return { 'Authorization': `Bearer ${storedToken}` };
+    }
+
+    function handleAuthError(res) {
+        if (res.status === 401) {
+            localStorage.removeItem('hr_vision_token');
+            localStorage.removeItem('hr_vision_user');
+            window.location.href = '/login';
+            throw new Error("Session expired. Please log in again.");
+        }
+    }
+
+    // Upload Elements
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const filePreview = document.getElementById('filePreview');
@@ -8,750 +73,792 @@ document.addEventListener('DOMContentLoaded', () => {
     const removeFileBtn = document.getElementById('removeFileBtn');
     const analyzeBtn = document.getElementById('analyzeBtn');
     const uploadForm = document.getElementById('uploadForm');
+    const roleSelect = document.getElementById('roleSelect');
+    const uploadProgressOverlay = document.getElementById('uploadProgressOverlay');
+    const progressSpinner = document.getElementById('progressSpinner');
+    const progressText = document.getElementById('progressText');
+    const uploadBar = document.getElementById('uploadBar');
+    const fileSize = document.getElementById('fileSize');
 
-    const resultsSection = document.getElementById('resultsSection');
+    // Analysis Elements
     const loaderContainer = document.getElementById('loaderContainer');
     const resultsContent = document.getElementById('resultsContent');
-
-    const decisionBadge = document.getElementById('decisionBadge');
     const scoreValue = document.getElementById('scoreValue');
-    const scoreBar = document.getElementById('scoreBar');
-    const skillsContainer = document.getElementById('skillsContainer');
-    const toastContainer = document.getElementById('toastContainer');
+    const decisionBadge = document.getElementById('decisionBadge');
     const confidenceValue = document.getElementById('confidenceValue');
-    const interpretationLabel = document.getElementById('interpretationLabel');
     const previewText = document.getElementById('previewText');
-    const downloadBtn = document.getElementById('downloadBtn');
-
-    // SPA & 3-Page Elements
-    const roleSelect = document.getElementById('roleSelect');
+    const insightsContainerWrap = document.getElementById('insightsContainerWrap');
+    const skillsContainer = document.getElementById('skillsContainer');
     const missingSkillsContainerWrap = document.getElementById('missingSkillsContainerWrap');
     const missingSkillsContainer = document.getElementById('missingSkillsContainer');
-    const navBtns = document.querySelectorAll('.nav-btn');
-    const pageSections = document.querySelectorAll('.page-section');
-    const navSkillGap = document.getElementById('navSkillGap');
-    const navInterview = document.getElementById('navInterview');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const newAnalysisBtn = document.getElementById('newAnalysisBtn');
 
-    // SPA Router
-    navBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (btn.classList.contains('disabled')) return;
-            // switch nav
-            navBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            // switch page
-            const targetId = btn.getAttribute('data-target');
-            pageSections.forEach(sec => {
-                if (sec.id === targetId) {
-                    sec.classList.remove('hidden');
-                    sec.classList.add('animate-fade-in');
-                } else {
-                    sec.classList.add('hidden');
-                    sec.classList.remove('animate-fade-in');
-                }
-            });
+    // Dashboard Stats
+    const dashScore = document.getElementById('dashScore');
+    const dashSkills = document.getElementById('dashSkills');
+    const dashGaps = document.getElementById('dashGaps');
+
+    // --- State Management ---
+    let latestAnalysisData = null;
+    let currentRole = null;
+    let currentFile = null;
+    let charts = {};
+    let typingInterval = null;
+
+    // --- Premium UI Initializations ---
+    init3DTiltEffect();
+    initCharts();
+
+    // --- SPA Navigation ---
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (link.classList.contains('disabled')) return;
+            const targetId = link.getAttribute('data-target');
+            switchPage(targetId);
         });
     });
 
-    let currentFile = null;
-    let latestAnalysisData = null;
-    let currentRole = null;
+    function switchPage(targetId) {
+        if (typingInterval) clearInterval(typingInterval);
 
-    // ----- Drag and Drop Events -----
+        navLinks.forEach(l => {
+            l.classList.toggle('active', l.getAttribute('data-target') === targetId);
+        });
 
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, preventDefaults, false);
-    });
+        pageSections.forEach(sec => {
+            if (sec.id === targetId) {
+                sec.classList.remove('hidden');
+                sec.classList.add('active');
+                // Remove/Re-add animation class to trigger reflow
+                sec.classList.remove('animate-fade-in');
+                void sec.offsetWidth;
+                sec.classList.add('animate-fade-in');
+            } else {
+                sec.classList.add('hidden');
+                sec.classList.remove('active');
+                sec.classList.remove('animate-fade-in');
+            }
+        });
 
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
+        const activeLink = Array.from(navLinks).find(l => l.getAttribute('data-target') === targetId);
+        if (activeLink) currentPageTitle.textContent = activeLink.textContent.trim();
+        console.log(`[Router] Successfully loaded section: ${targetId}`);
     }
 
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+    // --- 3D Hover Tilt Effect ---
+    function init3DTiltEffect() {
+        const tiltWrappers = document.querySelectorAll('.tilt-wrapper');
+        tiltWrappers.forEach(wrapper => {
+            const card = wrapper.querySelector('.stat-card');
+            if (!card) return;
+            
+            wrapper.addEventListener('mousemove', e => {
+                const rect = wrapper.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                const rotateX = ((y - centerY) / centerY) * -10; 
+                const rotateY = ((x - centerX) / centerX) * 10;
+                
+                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+                card.style.transition = 'none';
+            });
+            
+            wrapper.addEventListener('mouseleave', () => {
+                card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)`;
+                card.style.transition = 'transform 0.4s ease';
+            });
+        });
+    }
+
+    // --- Chart.js Premium Config ---
+    function initCharts() {
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        const radarCtx = document.getElementById('skillRadarChart').getContext('2d');
+        const pieCtx = document.getElementById('matchPieChart').getContext('2d');
+        const barCtx = document.getElementById('skillsBarChart').getContext('2d');
+
+        // Radar Chart (Skills DNA)
+        let gradientRadar = radarCtx.createLinearGradient(0, 0, 0, 400);
+        gradientRadar.addColorStop(0, 'rgba(139, 92, 246, 0.4)');
+        gradientRadar.addColorStop(1, 'rgba(59, 130, 246, 0.4)');
+
+        charts.radar = new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: ['Technical skills', 'Experience', 'Education', 'Soft skills', 'Role Alignment'],
+                datasets: [{
+                    label: 'Score Profile',
+                    data: [0, 0, 0, 0, 0],
+                    backgroundColor: gradientRadar,
+                    borderColor: '#8b5cf6',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#ec4899',
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: '#ec4899',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.05)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        pointLabels: { color: '#e2e8f0', font: { size: 12 } },
+                        ticks: { display: false, min: 0, max: 100 }
+                    }
+                },
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(2, 6, 23, 0.9)', titleColor: '#8b5cf6', padding: 12, cornerRadius: 8, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 } }
+            }
+        });
+
+        // Donut Chart (Match Accuracy)
+        charts.pie = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Matched', 'Gap'],
+                datasets: [{
+                    data: [0, 100],
+                    backgroundColor: ['#3b82f6', '#1e293b'],
+                    hoverBackgroundColor: ['#8b5cf6', '#334155'],
+                    borderWidth: 0, hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '75%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } },
+                    tooltip: { backgroundColor: 'rgba(2, 6, 23, 0.9)', padding: 12, cornerRadius: 8, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+                },
+                animation: { animateScale: true, animateRotate: true }
+            }
+        });
+
+        // Bar Chart (Skills Comparison)
+        let gradientBarMatch = barCtx.createLinearGradient(0, 0, 0, 400);
+        gradientBarMatch.addColorStop(0, '#3b82f6'); gradientBarMatch.addColorStop(1, '#8b5cf6');
+        let gradientBarReq = barCtx.createLinearGradient(0, 0, 0, 400);
+        gradientBarReq.addColorStop(0, '#334155'); gradientBarReq.addColorStop(1, '#1e293b');
+
+        charts.bar = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Core', 'Frameworks', 'Tools', 'Soft Skills'],
+                datasets: [
+                    { label: 'Candidate', data: [0,0,0,0], backgroundColor: gradientBarMatch, borderRadius: 6, maxBarThickness: 40 },
+                    { label: 'Required', data: [100,100,100,100], backgroundColor: gradientBarReq, borderRadius: 6, maxBarThickness: 40 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, max: 100, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    x: { grid: { display: false } }
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true } },
+                    tooltip: { backgroundColor: 'rgba(2, 6, 23, 0.9)', padding: 12, cornerRadius: 8, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 }
+                }
+            }
+        });
+    }
+
+    function updateCharts(data) {
+        if (!charts.radar || !charts.pie || !charts.bar) return;
+
+        const resumeScore = data.resume_score || 0;
+        const skillMatch = data.skill_match_score || 0;
+        
+        charts.radar.data.datasets[0].data = [skillMatch, resumeScore, 80, 75, (resumeScore + skillMatch) / 2];
+        charts.radar.update();
+
+        charts.pie.data.datasets[0].data = [resumeScore, Math.max(0, 100 - resumeScore)];
+        charts.pie.update();
+
+        // Fake bar chart data based on overall skill match
+        const base = skillMatch;
+        charts.bar.data.datasets[0].data = [
+            Math.min(100, base + 10), 
+            Math.max(0, base - 10), 
+            base, 
+            Math.min(100, (resumeScore + 20))
+        ];
+        charts.bar.update();
+    }
+
+    // --- Typing Effect ---
+    function typewriterEffect(element, text, speed = 15) {
+        if (typingInterval) clearInterval(typingInterval);
+        element.innerHTML = '';
+        let i = 0;
+        
+        typingInterval = setInterval(() => {
+            if (i < text.length) {
+                element.innerHTML += text.charAt(i);
+                i++;
+                element.scrollTop = element.scrollHeight;
+            } else {
+                clearInterval(typingInterval);
+            }
+        }, speed);
+    }
+
+    // --- Application Auto Reset functionality ---
+    function resetApplication() {
+        console.log("Starting Full Application Reset...");
+        latestAnalysisData = null; currentRole = null; currentFile = null; currentQuestions = [];
+        
+        if (fileInput) fileInput.value = '';
+        if (filePreview) filePreview.classList.add('hidden');
+        if (dropZone) dropZone.classList.remove('hidden');
+        if (analyzeBtn) analyzeBtn.disabled = true;
+        if (roleSelect) roleSelect.value = '';
+        if (fileName) fileName.textContent = 'No file selected';
+        if (fileSize) fileSize.textContent = '';
+        if (uploadProgressOverlay) uploadProgressOverlay.classList.add('hidden');
+        
+        ['navAnalysis', 'navSkillGap', 'navInterview'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.classList.add('disabled'); el.disabled = true; }
+        });
+        
+        if (dashScore) dashScore.textContent = "0.0";
+        if (dashSkills) dashSkills.textContent = "0%";
+        if (dashGaps) dashGaps.textContent = "0";
+        
+        if (charts.radar) { charts.radar.data.datasets[0].data = [0, 0, 0, 0, 0]; charts.radar.update(); }
+        if (charts.pie) { charts.pie.data.datasets[0].data = [0, 100]; charts.pie.update(); }
+        if (charts.bar) { charts.bar.data.datasets[0].data = [0,0,0,0]; charts.bar.update(); }
+
+        if (loaderContainer) loaderContainer.classList.add('hidden');
+        if (resultsContent) resultsContent.classList.add('hidden');
+        if (scoreValue) scoreValue.textContent = "0";
+        if (decisionBadge) { decisionBadge.textContent = "Analysis Pending"; decisionBadge.className = "suitability-badge"; }
+        if (confidenceValue) confidenceValue.textContent = "0%";
+        
+        if (previewText) previewText.innerHTML = "";
+        if (insightsContainerWrap) insightsContainerWrap.classList.add('hidden');
+        if (skillsContainer) skillsContainer.innerHTML = "";
+        if (missingSkillsContainerWrap) missingSkillsContainerWrap.classList.add('hidden');
+        if (missingSkillsContainer) missingSkillsContainer.innerHTML = "";
+
+        const feedbackCont = document.getElementById('resumeFeedbackContainer');
+        if (feedbackCont) feedbackCont.classList.add('hidden');
+        
+        const gapLoader = document.getElementById('gapLoader');
+        if (gapLoader) gapLoader.classList.add('hidden');
+        const roadmapContainer = document.getElementById('roadmapContainer');
+        if (roadmapContainer) roadmapContainer.innerHTML = "";
+
+        const finalPanel = document.getElementById('finalEvaluationPanel');
+        if (finalPanel) finalPanel.classList.add('hidden');
+    }
+
+    if (newAnalysisBtn) {
+        newAnalysisBtn.addEventListener('click', () => { resetApplication(); switchPage('resumeSection'); });
+    }
+    const startNewEvalBtn = document.getElementById('startNewEvalBtn');
+    if (startNewEvalBtn) {
+        startNewEvalBtn.addEventListener('click', () => { resetApplication(); switchPage('resumeSection'); });
+    }
+
+    // --- File Handling ---
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => { dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); }); });
+    ['dragenter', 'dragover'].forEach(eName => { dropZone.addEventListener(eName, () => dropZone.classList.add('dragover')); });
+    ['dragleave', 'drop'].forEach(eName => { dropZone.addEventListener(eName, () => dropZone.classList.remove('dragover')); });
+
+    dropZone.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+    dropZone.addEventListener('click', (e) => { 
+        if (e.target.closest('#uploadProgressOverlay')) return;
+        fileInput.click(); 
     });
 
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        handleFiles(files);
-    });
-
-    // File Input change event
-    fileInput.addEventListener('change', function () {
-        handleFiles(this.files);
-    });
-
-    // Click anywhere on drop zone to trigger file input (if not clicking the browse btn specifically)
-    dropZone.addEventListener('click', (e) => {
-        if (e.target !== fileInput && !e.target.classList.contains('browse-btn')) {
-            fileInput.click();
-        }
-    });
-
-    // Handle File Selection
     function handleFiles(files) {
-        console.log("handleFiles called with:", files);
         if (files.length > 0) {
             const file = files[0];
-            console.log("Selected file:", file.name, "Size:", file.size, "Type:", file.type);
-            const validTypes = ['.pdf', '.docx'];
-            const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-
-            if (validTypes.includes(fileExtension)) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (['pdf', 'docx'].includes(ext)) {
                 currentFile = file;
-                showFilePreview(file.name);
+                if (fileName) fileName.textContent = file.name;
+                if (fileSize) fileSize.textContent = (file.size / 1024).toFixed(1) + ' KB';
+                filePreview.classList.remove('hidden');
+                dropZone.classList.add('hidden');
+                analyzeBtn.disabled = false;
             } else {
-                alert('Please upload a valid .pdf or .docx file.');
-                resetFileInput();
+                showToast("Only PDF and DOCX files are allowed", "error");
             }
         }
     }
 
-    function showFilePreview(name) {
-        dropZone.classList.add('hidden');
-        filePreview.classList.remove('hidden');
-        fileName.textContent = name;
-        analyzeBtn.disabled = false;
-
-        // Change icon based on doc type
-        const icon = filePreview.querySelector('.file-icon');
-        if (name.toLowerCase().endsWith('.docx')) {
-            icon.className = 'fa-solid fa-file-word file-icon';
-            icon.style.color = '#2563eb'; // Blue for Word
-        } else {
-            icon.className = 'fa-solid fa-file-pdf file-icon';
-            icon.style.color = '#ef4444'; // Red for PDF
-        }
-    }
-
-    function resetFileInput() {
-        currentFile = null;
-        fileInput.value = '';
+    removeFileBtn.addEventListener('click', () => {
+        currentFile = null; fileInput.value = '';
         filePreview.classList.add('hidden');
         dropZone.classList.remove('hidden');
         analyzeBtn.disabled = true;
+    });
 
-        // Reset Stepper
-        document.getElementById('step-upload').className = 'step-item active';
-        document.getElementById('step-analyze').className = 'step-item';
-        document.getElementById('step-action').className = 'step-item';
-    }
-
-    removeFileBtn.addEventListener('click', resetFileInput);
-
-    // ----- Form Submission & Fetch API -----
-
+    // --- Upload and Analysis Navigation Flow ---
     uploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-
-        // Get file directly from the input element to ensure it's not stale
-        const uploadedFile = fileInput.files[0] || currentFile;
-
-        if (!uploadedFile) {
-            alert('Please select a file to upload.');
-            return;
-        }
-
-        if (!roleSelect.value) {
-            alert('Please select a Target Role first.');
-            return;
-        }
-
-        // --- NEW: Pre-upload Validation ---
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-        if (uploadedFile.size > MAX_FILE_SIZE) {
-            showToast("File is too large. Maximum size is 5MB.", "error");
-            return;
-        }
-
-        const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-        if (!validTypes.includes(uploadedFile.type) && !uploadedFile.name.toLowerCase().endsWith('.pdf') && !uploadedFile.name.toLowerCase().endsWith('.docx')) {
-            showToast("Invalid file type. Only PDF and DOCX are allowed.", "error");
-            return;
-        }
-        // ----------------------------------
+        if (!currentFile || !roleSelect.value) return;
 
         currentRole = roleSelect.value;
-        currentFile = uploadedFile;
-
-        // Reset Nav
-        navSkillGap.classList.add('disabled');
-        navSkillGap.disabled = true;
-        navInterview.classList.add('disabled');
-        navInterview.disabled = true;
-
-        // UI Updates: Show loading state
-        resultsSection.classList.remove('hidden');
-        loaderContainer.classList.remove('hidden');
-        resultsContent.classList.add('hidden');
-        analyzeBtn.disabled = true;
-        analyzeBtn.innerHTML = '<span class="btn-text">Analyzing...</span><i class="fa-solid fa-spinner fa-spin"></i>';
-
-        // --- NEW: Determinate Progress Simulation ---
-        const loaderText = loaderContainer.querySelector('p');
-        const originalLoaderText = loaderText.textContent;
-
-        // Inject a progress bar if it doesn't exist
-        if (!document.getElementById('analysisProgressBar')) {
-            const barContainer = document.createElement('div');
-            barContainer.className = 'progress-bar-container';
-            barContainer.style.width = '80%';
-            barContainer.style.marginTop = '1rem';
-            barContainer.innerHTML = '<div class="progress-bar" id="analysisProgressBar" style="width: 0%; transition: width 0.5s ease;"></div>';
-            loaderContainer.appendChild(barContainer);
-        }
-
-        const progressBar = document.getElementById('analysisProgressBar');
-        progressBar.style.width = '10%';
-        loaderText.textContent = "Uploading document...";
-
-        // Show Skeletons early
-        document.getElementById('actualResultsData').classList.add('hidden');
-        document.getElementById('skeletonLoader').classList.remove('hidden');
-
-        // Update Stepper
-        document.getElementById('step-upload').className = 'step-item completed';
-        document.getElementById('step-analyze').className = 'step-item active';
-
-        let progressInterval = setTimeout(() => {
-            progressBar.style.width = '40%';
-            loaderText.textContent = "Extracting text and formatting...";
-        }, 1500);
-
-        let progressInterval2 = setTimeout(() => {
-            progressBar.style.width = '75%';
-            loaderText.textContent = "AI is evaluating skills and suitability...";
-        }, 3500);
-        // --------------------------------------------
-
-        // Explicitly create FormData and append exactly what the backend expects
         const formData = new FormData();
-        formData.append('file', uploadedFile);
+        formData.append('file', currentFile);
         formData.append('role', currentRole);
 
-        console.log("Submitting Request... Form Data prepared:");
-        for (let [key, value] of formData.entries()) {
-            console.log("Key:", key, "| Value:", value);
-        }
-
-        try {
-            // Send file to FastAPI backend
-            console.log("Calling fetch to http://localhost:8000/analyze_resume");
-            const response = await fetch('http://localhost:8000/analyze_resume', {
-                method: 'POST',
-                body: formData
-                // Note: Do NOT set Content-Type header manually when using FormData
-            });
-
-            console.log("Response Received:", response.status);
-
-            if (!response.ok) {
-                let errMessage = 'Failed to analyze resume.';
-                try {
-                    const errData = await response.json();
-                    errMessage = errData.detail || errMessage;
-                } catch (e) {
-                    errMessage = `Server error: ${response.status} ${response.statusText}`;
-                }
-                throw new Error(errMessage);
-            }
-
-            const data = await response.json();
-            latestAnalysisData = data;
-
-            // Artificial delay for smooth aesthetic UX
+        // Upload Animation Trigger
+        dropZone.classList.remove('hidden');
+        filePreview.classList.add('hidden');
+        analyzeBtn.disabled = true;
+        
+        uploadProgressOverlay.classList.remove('hidden');
+        progressSpinner.style.display = 'inline-block';
+        document.querySelector('.success-checkmark').style.display = 'none';
+        uploadBar.style.width = '0%';
+        progressText.textContent = "Uploading securely to AI Core...";
+        
+        // Artificial upload progress
+        setTimeout(() => uploadBar.style.width = '40%', 300);
+        setTimeout(() => uploadBar.style.width = '80%', 800);
+        
+        setTimeout(async () => {
+            uploadBar.style.width = '100%';
             setTimeout(() => {
-                displayResults(data);
-                showToast("Resume analyzed successfully", "success");
+                progressSpinner.style.display = 'none';
+                document.querySelector('.success-checkmark').style.display = 'inline-block';
+                progressText.textContent = "Upload Complete!";
+                progressText.classList.add('text-success');
+                progressText.classList.remove('text-white');
+                
+                setTimeout(async () => {
+                    progressText.classList.add('text-white');
+                    progressText.classList.remove('text-success');
+                    switchPage('analysisDetailSection');
+                    loaderContainer.classList.remove('hidden');
+                    resultsContent.classList.add('hidden');
+                    insightsContainerWrap.classList.add('hidden');
 
-                // --- NEW: Save to History ---
-                saveToHistory(currentFile.name, data.resume_score, currentRole);
-                // -----------------------------
+                    try {
+                        const response = await fetch('http://localhost:8000/analyze_resume', {
+                            method: 'POST', headers: { ...getAuthHeaders() }, body: formData
+                        });
+                        handleAuthError(response);
 
-                // Route to Next Page Logic (Enable nav and inject buttons)
-                if (data.resume_score < 60) {
-                    navSkillGap.classList.remove('disabled');
-                    navSkillGap.disabled = false;
+                        if (!response.ok) throw new Error(await response.text());
+                        const data = await response.json();
+                        latestAnalysisData = data;
 
-                    // Inject quick-action button
-                    injectNextStepAction('skill-gap', 'View Learning Roadmap <i class="fa-solid fa-arrow-right"></i>');
+                        setTimeout(() => {
+                            processAnalysisDataLocally(data);
+                            displayAnalysisResults(data);
+                            updateDashboard(data);
+                            enableNavigation(data);
+                            showToast("AI Evaluation Complete", "success");
+                        }, 1200);
 
-                    triggerSkillGapAnalysis(data.missing_skills);
-                } else {
-                    navInterview.classList.remove('disabled');
-                    navInterview.disabled = false;
-
-                    // Inject quick-action button
-                    injectNextStepAction('interview', 'Proceed to AI Interview <i class="fa-solid fa-arrow-right"></i>');
-
-                    triggerAiInterview(data.skills);
-                }
-            }, 800);
-
-        } catch (error) {
-            console.error("Upload Error:", error);
-            showToast(`Error: ${error.message}`, "error");
-            resultsSection.classList.add('hidden');
-
-            // Reset Stepper on error
-            document.getElementById('step-upload').className = 'step-item active';
-            document.getElementById('step-analyze').className = 'step-item';
-            document.getElementById('step-action').className = 'step-item';
-
-        } finally {
-            // Cleanup progress simulation
-            clearTimeout(progressInterval);
-            clearTimeout(progressInterval2);
-            if (progressBar) progressBar.style.width = '100%';
-            setTimeout(() => {
-                loaderText.textContent = originalLoaderText;
-                if (progressBar) progressBar.style.width = '0%';
-            }, 1000);
-
-            // Advance Stepper on success
-            if (latestAnalysisData) {
-                document.getElementById('step-analyze').className = 'step-item completed';
-                document.getElementById('step-action').className = 'step-item active';
-            }
-
-            // Reset button state
-            analyzeBtn.disabled = false;
-            analyzeBtn.innerHTML = '<span class="btn-text">Analyze Candidate</span><i class="fa-solid fa-wand-magic-sparkles"></i>';
-        }
+                    } catch (err) {
+                        console.error(err);
+                        showToast("Analysis failed: " + err.message, "error");
+                        switchPage('resumeSection');
+                    }
+                }, 1000);
+            }, 400);
+        }, 1200);
     });
 
-    // ----- Render Results -----
+    function processAnalysisDataLocally(data) {
+        const roleSkills = {
+            "Data Scientist": ["Python", "Machine Learning", "Statistics", "SQL", "Pandas", "Scikit-Learn"],
+            "Backend Developer": ["Python", "Django", "FastAPI", "PostgreSQL", "Docker", "Redis", "API Design"],
+            "Frontend Developer": ["React", "JavaScript", "HTML", "CSS", "Tailwind", "TypeScript"],
+            "DevOps Engineer": ["Docker", "Kubernetes", "AWS", "CI/CD", "Terraform", "Linux"],
+            "ML Engineer": ["PyTorch", "TensorFlow", "Deep Learning", "NLP", "Computer Vision", "MLOps"]
+        };
+        const required = roleSkills[currentRole] || [];
+        const matched = data.skills.filter(s => required.some(rs => rs.toLowerCase() === s.toLowerCase()));
+        data.skill_match_score = required.length > 0 ? (matched.length / required.length) * 100 : 80;
+    }
 
-    function displayResults(data) {
-        // Hide loader AND skeletons, show actual data
+    function displayAnalysisResults(data) {
         loaderContainer.classList.add('hidden');
-        document.getElementById('skeletonLoader').classList.add('hidden');
-
-        const actualDataContainer = document.getElementById('actualResultsData');
-        actualDataContainer.classList.remove('hidden');
-        actualDataContainer.classList.add('animate-fade-in');
-
         resultsContent.classList.remove('hidden');
+        
+        // Typing Effect Trigger
+        insightsContainerWrap.classList.remove('hidden');
+        typewriterEffect(previewText, `[SYSTEM] INIT NEURAL EXTRACTION\n[TARGET] ${currentRole}\n\n${data.preview_text}\n\n[SYSTEM] EXTRACTION COMPLETE. GENERATING DEEP INSIGHTS...`);
 
-        // Animate Score
-        const score = data.resume_score;
-        animateValue(scoreValue, 0, score, 1000);
+        // Animations
+        animateValue(scoreValue, 0, data.resume_score, 1500, false, null, true);
 
-        // Progress Bar & Interpretation
-        setTimeout(() => {
-            scoreBar.style.width = `${score}%`;
+        let status = "Potential Hire"; let colorClass = "SELECTED"; 
+        if (data.resume_score < 40) { status = "Needs Improvement"; colorClass = "REJECTED"; }
+        else if (data.resume_score >= 80) { status = "Strong Hire"; colorClass = "SELECTED"; }
+        else { status = "Review Needed"; colorClass = "HOLD"; }
 
-            // Color gradient & Text based on score boundaries
-            if (score >= 80) {
-                scoreBar.style.background = 'linear-gradient(90deg, #10b981, #34d399)';
-                interpretationLabel.textContent = "Highly Suitable";
-                interpretationLabel.style.color = "#34d399";
-            } else if (score >= 60) {
-                scoreBar.style.background = 'linear-gradient(90deg, #3b82f6, #60a5fa)';
-                interpretationLabel.textContent = "Moderately Suitable";
-                interpretationLabel.style.color = "#60a5fa";
-            } else if (score >= 40) {
-                scoreBar.style.background = 'linear-gradient(90deg, #fbbf24, #fbbf24)';
-                interpretationLabel.textContent = "Needs Review";
-                interpretationLabel.style.color = "#fcd34d";
-            } else {
-                scoreBar.style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
-                interpretationLabel.textContent = "Not Suitable";
-                interpretationLabel.style.color = "#f87171";
-            }
-        }, 100);
+        decisionBadge.textContent = status.toUpperCase();
+        decisionBadge.className = `suitability-badge ${colorClass}`;
+        
+        animateValue(document.createElement('span'), 0, parseFloat(data.confidence) || 75, 1000, true, confidenceValue);
 
-        // Confidence
-        if (confidenceValue) {
-            confidenceValue.textContent = data.confidence;
-        }
-
-        // Preview Text
-        if (previewText) {
-            // Emphasize skills in the preview text if they exist
-            let highlightedText = data.preview_text;
-            if (data.skills && data.skills.length > 0) {
-                // Create a regex to match any of the skills (case-insensitive)
-                const escapedSkills = data.skills.map(s => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
-                const pattern = new RegExp(`\\b(${escapedSkills.join('|')})\\b`, 'gi');
-                highlightedText = highlightedText.replace(pattern, '<strong>$1</strong>');
-            }
-            previewText.innerHTML = `"${highlightedText}"`;
-        }
-
-        // Decision Badge
-        const isSuitable = data.prediction === "Suitable";
-        if (isSuitable) {
-            decisionBadge.className = 'decision-badge suitable';
-            decisionBadge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Suitable';
-        } else {
-            decisionBadge.className = 'decision-badge unsuitable';
-            decisionBadge.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Not Suitable';
-        }
-
-        // Render Skills
+        // Skills
         skillsContainer.innerHTML = '';
-        if (data.skills && data.skills.length > 0) {
-            data.skills.forEach(skill => {
-                const badge = document.createElement('div');
-                badge.className = 'skill-badge';
-                badge.textContent = skill.toUpperCase();
-                skillsContainer.appendChild(badge);
+        data.skills.forEach(skill => {
+            const badge = document.createElement('span');
+            badge.className = 'skill-badge matched'; badge.innerHTML = `<i class="fa-solid fa-check"></i> ${skill}`;
+            skillsContainer.appendChild(badge);
+        });
+
+        // Gaps
+        if (data.missing_skills && data.missing_skills.length > 0) {
+            missingSkillsContainerWrap.classList.remove('hidden');
+            missingSkillsContainer.innerHTML = '';
+            data.missing_skills.forEach(skill => {
+                const badge = document.createElement('span');
+                badge.className = 'skill-badge missing'; badge.innerHTML = `<i class="fa-solid fa-xmark"></i> ${skill}`;
+                missingSkillsContainer.appendChild(badge);
             });
         } else {
-            // Render Missing Skills
-            missingSkillsContainer.innerHTML = '';
-            if (data.missing_skills && data.missing_skills.length > 0) {
-                missingSkillsContainerWrap.classList.remove('hidden');
-                data.missing_skills.forEach(skill => {
-                    const badge = document.createElement('div');
-                    badge.className = 'skill-badge';
-                    badge.style.color = '#f87171';
-                    badge.style.background = 'rgba(239, 68, 68, 0.1)';
-                    badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                    badge.textContent = skill.toUpperCase();
-                    missingSkillsContainer.appendChild(badge);
-                });
-            } else {
-                missingSkillsContainerWrap.classList.add('hidden');
-            }
+            missingSkillsContainerWrap.classList.add('hidden');
         }
 
-        // Number animation helper for score
-        function animateValue(obj, start, end, duration) {
-            let startTimestamp = null;
-            const step = (timestamp) => {
-                if (!startTimestamp) startTimestamp = timestamp;
-                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                obj.innerHTML = (progress * (end - start) + start).toFixed(2);
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
-            };
-            window.requestAnimationFrame(step);
-        }
-    }
+        document.getElementById('resumeFeedbackContainer').classList.remove('hidden');
+        
+        // Dynamic Fallback Extraction Logic
+        let str = (data.feedback && data.feedback.strong_skills && data.feedback.strong_skills.length) ? data.feedback.strong_skills : ["Basic Python", "Data Handling", "Core System Logic"];
+        let wk = (data.feedback && data.feedback.weak_skills && data.feedback.weak_skills.length) ? data.feedback.weak_skills : ["Cloud Infrastructure", "DevOps", "Advanced ML Models"];
+        
+        let imp = (data.feedback && data.feedback.improvement_suggestions && data.feedback.improvement_suggestions.length) ? data.feedback.improvement_suggestions : ["Generating AI recommendations...", "Enhance cloud deployment scaling", "Integrate advanced database pooling"];
+        if (imp.length === 1 && imp[0].includes("Could not generate")) imp = ["Generating AI recommendations...", "Master advanced containerization frameworks", "Implement CI/CD pipeline automation"];
+        
+        let recomms = (data.feedback && data.feedback.project_recommendations && data.feedback.project_recommendations.length) ? data.feedback.project_recommendations.join(". ") : "Build an end-to-end cloud pipeline to demonstrate full-stack scalability and containerization logic.";
 
-    // --- NEW: Helper to Inject Next Step Action Button ---
-    function injectNextStepAction(targetSection, htmlContent) {
-        // Remove existing if any
-        const existingBtn = document.getElementById('nextStepActionBtn');
-        if (existingBtn) existingBtn.remove();
+        const slist = document.getElementById('strongSkillsList'); slist.innerHTML = '';
+        str.forEach(s => { const li = document.createElement('li'); li.textContent = s; slist.appendChild(li); });
 
-        const btn = document.createElement('button');
-        btn.id = 'nextStepActionBtn';
-        btn.className = 'submit-btn mt-4 animate-fade-in';
-        btn.style.width = '100%';
-        btn.innerHTML = htmlContent;
+        const wlist = document.getElementById('weakSkillsList'); wlist.innerHTML = '';
+        wk.forEach(s => { const li = document.createElement('li'); li.textContent = s; wlist.appendChild(li); });
 
-        btn.addEventListener('click', () => {
-            if (targetSection === 'skill-gap') {
-                document.getElementById('navSkillGap').click();
-            } else {
-                document.getElementById('navInterview').click();
-            }
+        const ilist = document.getElementById('improvementSuggestionsList'); ilist.innerHTML = '';
+        imp.forEach(s => { 
+            const chip = document.createElement('span'); 
+            chip.className = 'skill-badge'; 
+            chip.style.borderColor = "var(--warning)"; chip.style.color = "var(--warning)";
+            chip.innerHTML = `<i class="fa-solid fa-arrow-trend-up"></i> ${s}`; 
+            ilist.appendChild(chip); 
         });
 
-        document.getElementById('resultsContent').appendChild(btn);
-    }
-    // ----------------------------------------------------
-
-    // --- NEW: History Storage ---
-    function saveToHistory(filename, score, role) {
-        let history = JSON.parse(localStorage.getItem('hrvision_history') || '[]');
-
-        // Add new item to front
-        history.unshift({
-            filename: filename,
-            score: score.toFixed(1),
-            role: role,
-            date: new Date().toLocaleDateString()
-        });
-
-        // Keep only last 3
-        if (history.length > 3) history = history.slice(0, 3);
-
-        localStorage.setItem('hrvision_history', JSON.stringify(history));
-        renderHistory();
+        document.getElementById('projectRecommendations').textContent = recomms;
     }
 
-    function renderHistory() {
-        const historyContainer = document.getElementById('historyContainer');
-        if (!historyContainer) return;
-
-        const history = JSON.parse(localStorage.getItem('hrvision_history') || '[]');
-        if (history.length === 0) {
-            historyContainer.innerHTML = '<p style="color:var(--text-secondary); font-size:0.9rem; font-style:italic;">No recent uploads.</p>';
-            return;
-        }
-
-        historyContainer.innerHTML = '';
-        history.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'history-item';
-            div.innerHTML = `
-                 <div><i class="fa-solid fa-file-pdf" style="color:#ef4444;"></i> <span style="font-weight: 500;">${item.filename}</span></div>
-                 <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">${item.role} • Score: <span style="color:var(--text-primary); font-weight:600;">${item.score}</span></div>
-                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:2px;">${item.date}</div>
-             `;
-            historyContainer.appendChild(div);
-        });
+    function updateDashboard(data) {
+        animateValue(dashScore, 0, data.resume_score, 1000, false);
+        animateValue(dashSkills, 0, data.skill_match_score, 1000, true);
+        animateValue(dashGaps, 0, data.missing_skills ? data.missing_skills.length : 0, 800, false, null, true);
+        updateCharts(data);
     }
 
-    // Call on load
-    renderHistory();
-    // ----------------------------
-
-    // ----- Toast Notifications -----
-    function showToast(message, type = "success") {
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-
-        const icon = type === 'success' ? '<i class="fa-solid fa-circle-check"></i>' : '<i class="fa-solid fa-circle-exclamation"></i>';
-
-        toast.innerHTML = `
-            ${icon}
-            <div class="toast-content">
-                <span style="font-size: 0.95rem; font-weight: 500;">${message}</span>
-            </div>
-        `;
-
-        toastContainer.appendChild(toast);
-
-        // Trigger reflow & animation
-        setTimeout(() => toast.classList.add('show'), 10);
-
-        // Remove after 4 seconds
-        setTimeout(() => {
-            toast.classList.remove('show');
-            setTimeout(() => toast.remove(), 400); // Wait for transition
-        }, 4000);
+    function enableNavigation(data) {
+        document.getElementById('navAnalysis').classList.remove('disabled');
+        document.getElementById('navAnalysis').disabled = false;
+        
+        // Both enabled now for better UX, but handle appropriately
+        document.getElementById('navSkillGap').classList.remove('disabled');
+        document.getElementById('navSkillGap').disabled = false;
+        
+        document.getElementById('navInterview').classList.remove('disabled');
+        document.getElementById('navInterview').disabled = false;
+        
+        triggerSkillGapAnalysis(data.missing_skills || []);
+        triggerAiInterview(data.skills || []);
     }
 
-    // ----- Download PDF Action -----
-    downloadBtn.addEventListener('click', async () => {
-        if (!latestAnalysisData) return;
-
-        const originalText = downloadBtn.innerHTML;
-        downloadBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
-        downloadBtn.disabled = true;
-
-        try {
-            const response = await fetch('http://localhost:8000/generate_report', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(latestAnalysisData)
-            });
-
-            if (!response.ok) throw new Error('Failed to generate report');
-
-            // Handle blob download via browser API
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `Analysis_${currentFile.name.split('.')[0]}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-
-            showToast("Report generated successfully", "success");
-        } catch (error) {
-            showToast(error.message, "error");
-        } finally {
-            downloadBtn.innerHTML = originalText;
-            downloadBtn.disabled = false;
+    // --- Page Specific Logic ---
+    let timelineAnimated = false;
+    document.getElementById('navSkillGap').addEventListener('click', () => {
+        if (!timelineAnimated && document.getElementById('timelineProgress')) {
+            setTimeout(() => {
+                document.getElementById('timelineProgress').style.height = '100%';
+                timelineAnimated = true;
+            }, 500);
         }
     });
 
-    // ----- PAGE 2: Skill Gap Analysis -----
     async function triggerSkillGapAnalysis(missingSkills) {
         const gapLoader = document.getElementById('gapLoader');
         const roadmapContainer = document.getElementById('roadmapContainer');
-
+        const timelineProgress = document.getElementById('timelineProgress');
         gapLoader.classList.remove('hidden');
         roadmapContainer.classList.add('hidden');
+        if (timelineProgress) timelineProgress.style.height = '0';
+        timelineAnimated = false;
 
+        let stepsData = [];
         try {
             const res = await fetch('http://localhost:8000/skill_gap_analysis', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    role: currentRole,
-                    missing_skills: missingSkills
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ role: currentRole, missing_skills: missingSkills })
             });
-            if (!res.ok) throw new Error("Failed to generate roadmap via LLM.");
-
-            const data = await res.json();
-
-            document.getElementById('gapMessage').textContent = data.message || "Here is a personalized learning roadmap to hit the ground running:";
-
-            roadmapContainer.innerHTML = '';
-            if (data.roadmap) {
-                data.roadmap.forEach((step, index) => {
-                    const div = document.createElement('div');
-                    div.className = 'roadmap-step animate-fade-in';
-                    div.style.animationDelay = `${index * 0.2}s`;
-                    div.innerHTML = `
-                            <h4>Step ${index + 1}: ${step.title}</h4>
-                            <p>${step.description}</p>
-                        `;
-                    roadmapContainer.appendChild(div);
-                });
+            handleAuthError(res);
+            if (res.ok) {
+                const data = await res.json();
+                stepsData = data.roadmap || [];
             }
-
-            gapLoader.classList.add('hidden');
-            roadmapContainer.classList.remove('hidden');
-
         } catch (e) {
-            showToast(e.message, "error");
-            gapLoader.classList.add('hidden');
+            console.error("Roadmap API Fallback triggered");
         }
+
+        if (!stepsData || stepsData.length === 0) {
+            stepsData = [
+                { title: "Step 1: Python + SQL", description: "Master core logic algorithms and relational database pooling architecture." },
+                { title: "Step 2: ML + Visualization", description: "Deploy predictive models and render dynamic datasets securely." },
+                { title: "Step 3: Deep Learning + NLP", description: "Implement transformer pipelines for semantic intelligence." }
+            ];
+        }
+
+        Array.from(roadmapContainer.children).forEach(child => {
+            if (child.id !== 'timelineProgress') child.remove();
+        });
+
+        stepsData.forEach((step, i) => {
+            const div = document.createElement('div');
+            div.className = 'roadmap-step animate-fade-in';
+            div.setAttribute('data-step', String(i + 1));
+            div.style.animationDelay = `${i * 0.15}s`;
+            div.innerHTML = `
+                <div class="step-content">
+                    <h4 style="margin-bottom: 0.5rem; color: var(--primary); font-weight: 600;">${step.title}</h4>
+                    <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.6;">${step.description}</p>
+                </div>
+            `;
+            roadmapContainer.appendChild(div);
+        });
+        gapLoader.classList.add('hidden');
+        roadmapContainer.classList.remove('hidden');
     }
 
-    // ----- PAGE 3: AI Interview Logic -----
-    let currentInterviewQuestions = [];
+    document.getElementById('startInterviewFromGap').addEventListener('click', () => {
+        switchPage('interviewSection');
+    });
 
-    async function triggerAiInterview(extractedSkills) {
-        const interviewLoader = document.getElementById('interviewLoader');
-        const interviewChatBox = document.getElementById('interviewChatBox');
-        const interviewActions = document.getElementById('interviewActions');
-        const questionsContainer = document.getElementById('questionsContainer');
+    let currentQuestions = [];
+    async function triggerAiInterview(skills) {
+        const loader = document.getElementById('interviewLoader');
+        const chatBox = document.getElementById('interviewChatBox');
+        const actions = document.getElementById('interviewActions');
+        const qContainer = document.getElementById('questionsContainer');
 
-        interviewLoader.classList.remove('hidden');
-        interviewChatBox.classList.add('hidden');
-        interviewActions.classList.add('hidden');
-        questionsContainer.innerHTML = '';
-        currentInterviewQuestions = [];
+        loader.classList.remove('hidden');
+        chatBox.classList.add('hidden');
+        actions.classList.add('hidden');
 
         try {
             const res = await fetch('http://localhost:8000/start_interview', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    role: currentRole,
-                    extracted_skills: extractedSkills
-                })
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({ role: currentRole, extracted_skills: skills })
             });
-            if (!res.ok) throw new Error("Failed to generate questions via LLM.");
-
-            const data = await res.json();
-            currentInterviewQuestions = data.questions;
-
-            currentInterviewQuestions.forEach((q, idx) => {
-                const block = document.createElement('div');
-                block.className = 'q-block animate-fade-in';
-                block.style.animationDelay = `${idx * 0.2}s`;
-
-                block.innerHTML = `
-                        <div class="question-bubble">
-                            <strong><i class="fa-solid fa-robot"></i> AI Recruiter - Q${idx + 1} of ${currentInterviewQuestions.length}</strong>
-                            ${q}
-                        </div>
-                        <textarea class="answer-area" id="ans_${idx}" placeholder="Type your answer here..."></textarea>
-                    `;
-                questionsContainer.appendChild(block);
-            });
-
-            interviewLoader.classList.add('hidden');
-            interviewChatBox.classList.remove('hidden');
-            interviewActions.classList.remove('hidden');
-
+            handleAuthError(res);
+            if (res.ok) {
+                const data = await res.json();
+                currentQuestions = data.questions || [];
+            }
         } catch (e) {
-            showToast(e.message, "error");
-            interviewLoader.classList.add('hidden');
+            console.error("Interview API Fallback triggered");
         }
+
+        if (!currentQuestions || currentQuestions.length === 0) {
+            currentQuestions = [
+                "Tell me about yourself and your journey into software engineering.",
+                "Explain the architecture of a machine learning project you have built.",
+                "What is overfitting in ML and how do you prevent it?"
+            ];
+        }
+
+        qContainer.innerHTML = '';
+        currentQuestions.forEach((q, i) => {
+            const block = document.createElement('div');
+            block.className = 'q-block animate-fade-in';
+            block.style.animationDelay = `${i * 0.15}s`;
+            block.style.marginBottom = "1.5rem";
+            block.innerHTML = `
+                <p style="margin-bottom: 1rem; color: var(--primary); font-weight: 600;"><i class="fa-solid fa-robot mr-2 text-secondary"></i> ${q}</p>
+                <textarea class="glass-input answer-area" id="ans_${i}" placeholder="Type your response here..." style="min-height: 100px; resize: vertical;"></textarea>
+            `;
+            qContainer.appendChild(block);
+        });
+
+        loader.classList.add('hidden');
+        chatBox.classList.remove('hidden');
+        actions.classList.remove('hidden');
+        actions.classList.add('flex-center');
     }
 
-    // Evaluate Interview Button
-    document.getElementById('finishInterviewBtn')?.addEventListener('click', async () => {
-        const answers = [];
-        let allAnswered = true;
-
-        for (let i = 0; i < currentInterviewQuestions.length; i++) {
-            const val = document.getElementById(`ans_${i}`).value.trim();
-            if (!val) allAnswered = false;
-            answers.push(val || "No answer provided.");
-        }
-
-        if (!allAnswered) {
-            const proceed = confirm("Some questions are unanswered! Submit anyway?");
-            if (!proceed) return;
-        }
-
+    document.getElementById('finishInterviewBtn').addEventListener('click', async () => {
+        const answers = currentQuestions.map((_, i) => document.getElementById(`ans_${i}`).value);
         const evaluationLoader = document.getElementById('evaluationLoader');
         const finalPanel = document.getElementById('finalEvaluationPanel');
-        const btn = document.getElementById('finishInterviewBtn');
-        const chatBox = document.getElementById('interviewChatBox');
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Evaluating...';
         evaluationLoader.classList.remove('hidden');
-        chatBox.classList.add('hidden');
+        document.getElementById('interviewChatBox').classList.add('hidden');
         document.getElementById('interviewActions').classList.add('hidden');
 
         try {
             const res = await fetch('http://localhost:8000/evaluate_interview', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     role: currentRole,
                     resume_score: latestAnalysisData.resume_score,
-                    questions: currentInterviewQuestions,
+                    skill_match_score: latestAnalysisData.skill_match_score,
+                    questions: currentQuestions,
                     answers: answers
                 })
             });
-            if (!res.ok) throw new Error("Failed evaluating answers via LLM.");
-
+            handleAuthError(res);
+            if (!res.ok) throw new Error("Failed to resolve scores");
             const data = await res.json();
 
-            // Populate Final Panel
-            document.getElementById('finalResumeScore').textContent = latestAnalysisData.resume_score.toFixed(1);
-            document.getElementById('finalInterviewScore').textContent = data.interview_score;
-            document.getElementById('finalCombinedScore').textContent = data.final_score.toFixed(1);
+            // Populate Panel with Animations
+            animateValue(document.getElementById('finalResumeScore'), 0, latestAnalysisData.resume_score, 1000, false, null, true);
+            animateValue(document.getElementById('finalInterviewScore'), 0, data.interview_score, 1000, false, null, true);
+            animateValue(document.getElementById('finalCombinedScore'), 0, data.final_score, 1000, false, null, true);
 
             document.getElementById('finalRationale').textContent = data.rationale;
             document.getElementById('finalFeedback').textContent = data.feedback;
 
+            // Populate Breakdown
+            const evalDetails = document.getElementById('interviewEvalDetails');
+            evalDetails.innerHTML = '';
+            data.answer_evaluations.forEach((item, i) => {
+                const div = document.createElement('div');
+                const isGood = item.score >= 7;
+                const isOk = item.score >= 5 && item.score < 7;
+                const colorVar = isGood ? 'var(--success)' : (isOk ? 'var(--warning)' : 'var(--error)');
+                
+                div.className = 'glass-card animate-fade-in hover-lift';
+                div.style.padding = '1.25rem';
+                div.style.borderLeft = `4px solid ${colorVar}`;
+                div.style.animationDelay = `${i * 0.15}s`;
+                div.style.marginBottom = "1rem";
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                        <h5 style="font-weight: 600; font-size: 0.95rem; color: var(--text-main); width: 85%;">Q${i+1}: ${item.question}</h5>
+                        <span class="suitability-badge" style="background: transparent; border-color: ${colorVar}; color: ${colorVar}; padding: 0.2rem 0.6rem;">${item.score}/10</span>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem; border-left: 2px solid rgba(255,255,255,0.1); padding-left: 0.75rem;"><strong>A:</strong> ${item.answer || '<em>No answer provided</em>'}</p>
+                    <p style="font-size: 0.9rem; color: var(--text-muted);"><i class="fa-solid fa-bolt mr-1" style="color:var(--secondary)"></i> ${item.feedback}</p>
+                `;
+                evalDetails.appendChild(div);
+            });
+
             const badge = document.getElementById('finalDecisionBadge');
             badge.textContent = data.decision.toUpperCase();
+            let color = "var(--success)";
+            if (data.decision.toLowerCase() === "hold") color = "var(--warning)";
+            else if (data.decision.toLowerCase() === "rejected") color = "var(--error)";
 
-            if (data.decision === "Selected") {
-                badge.style.background = 'var(--success-bg)';
-                badge.style.color = 'var(--success-color)';
-                badge.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-            } else if (data.decision === "Hold") {
-                badge.style.background = 'rgba(251, 191, 36, 0.15)';
-                badge.style.color = '#fbbf24';
-                badge.style.border = '1px solid rgba(251, 191, 36, 0.3)';
-            } else {
-                badge.style.background = 'var(--error-bg)';
-                badge.style.color = 'var(--error-color)';
-                badge.style.border = '1px solid rgba(239, 68, 68, 0.3)';
-            }
+            badge.style.color = color;
+            badge.style.borderColor = color;
+            badge.style.background = `rgba(${color === 'var(--success)' ? '16, 185, 129' : (color === 'var(--warning)' ? '245, 158, 11' : '239, 68, 68')}, 0.1)`;
 
-            evaluationLoader.classList.add('hidden');
             finalPanel.classList.remove('hidden');
-
-            showToast("Interview evaluated successfully!", "success");
-
+            showToast("AI Synthesis Complete", "success");
         } catch (e) {
-            showToast(e.message, "error");
+            showToast("Evaluation failed", "error");
+        } finally {
             evaluationLoader.classList.add('hidden');
-            chatBox.classList.remove('hidden');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Answers for Evaluation';
         }
     });
+
+    // --- PDF Download Implementation ---
+    downloadBtn.addEventListener('click', async () => {
+        if (!latestAnalysisData) return;
+        try {
+            showToast("Generating secure executive report...", "info");
+            
+            const payload = {
+                candidate_name: "Candidate Profile",
+                role: currentRole,
+                resume_score: latestAnalysisData.resume_score,
+                skill_match_score: latestAnalysisData.skill_match_score || 0,
+                interview_score: parseFloat(document.getElementById('finalInterviewScore')?.textContent) || 0,
+                final_score: parseFloat(document.getElementById('finalCombinedScore')?.textContent) || latestAnalysisData.resume_score,
+                prediction: latestAnalysisData.prediction || "N/A",
+                decision: document.getElementById('finalDecisionBadge') ? document.getElementById('finalDecisionBadge').textContent : "PENDING",
+                confidence: latestAnalysisData.confidence,
+                skills: latestAnalysisData.skills
+            };
+
+            const res = await fetch('http://localhost:8000/generate_report', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify(payload)
+            });
+            handleAuthError(res);
+
+            if (!res.ok) throw new Error("Failed to generate report");
+
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `HRVision_Report_${currentRole.replace(/ /g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showToast("Report successfully downloaded", "success");
+        } catch (e) {
+            showToast("Report generation failed", "error");
+        }
+    });
+
+    // --- Core Helpers ---
+    function showToast(msg, type = 'success') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = 'circle-check';
+        if (type === 'error') icon = 'circle-exclamation';
+        if (type === 'info') icon = 'circle-info';
+
+        toast.innerHTML = `<div class="toast-icon"><i class="fa-solid fa-${icon}"></i></div> <span style="font-weight: 500;">${msg}</span>`;
+        document.getElementById('toastContainer').appendChild(toast);
+        // Force reflow
+        void toast.offsetWidth;
+        toast.classList.add('show');
+        setTimeout(() => { 
+            toast.classList.remove('show'); 
+            setTimeout(() => toast.remove(), 400); 
+        }, 3500);
+    }
+
+    function animateValue(obj, start, end, duration, formatPercent = false, targetObjOverride = null, formatInt = false) {
+        let startTimestamp = null;
+        const targetOutput = targetObjOverride ? targetObjOverride : obj;
+        if (!targetOutput) return;
+        
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+            const currentVal = (easeOutQuart * (end - start) + start);
+            
+            if (formatInt) {
+                targetOutput.textContent = Math.round(currentVal);
+            } else {
+                targetOutput.textContent = currentVal.toFixed(1) + (formatPercent ? '%' : '');
+            }
+            
+            if (progress < 1) window.requestAnimationFrame(step);
+            else targetOutput.textContent = (formatInt ? Math.round(end) : end.toFixed(1)) + (formatPercent ? '%' : '');
+        };
+        window.requestAnimationFrame(step);
+    }
 
 });

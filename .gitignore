@@ -34,3 +34,9 @@ venv/
 
 # Project specific
 backend/models/*.pkl
+backend/users.db
+backend/uploads/
+uploads/
+node_modules/
+.env*
+! .env.example
