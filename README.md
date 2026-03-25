@@ -1,78 +1,120 @@
-# 🚀 AI Resume Analyzer SaaS (v1.0)
+# 🚀 AI Resume Analyzer SaaS
 
-A high-performance, production-grade AI-powered recruitment platform designed to revolutionize the hiring process. Built with **FastAPI**, **Google Gemini AI**, and **Modern Glassmorphism UI**, this system automates candidate evaluation with precision and speed.
+AI-powered recruitment platform for resume analysis, skill gap detection, and interview preparation.
 
 ---
 
-## ✨ Key Features
+## 🔥 Features
 
-- 🔐 **Secure JWT Authentication**: Robust session management with persistent login states and automatic unauthorized redirection.
-- 📊 **Intelligent Dashboard**: Real-time analytics with glassmorphic cards and interactive Chart.js visualizations.
-- 📄 **Advanced Resume Parsing**: Instant PDF/DOCX text extraction using optimized NLP pipelines.
-- 🤖 **AI-Driven Skill Gap Analysis**: Automatically detects missing technical skills and generates personalized upskilling roadmaps.
-- 💬 **Dynamic AI Interview Portal**: Generates real-time, profile-specific technical questions using Gemini 2.5 Flash.
-- 📈 **Candidate Suitability Scoring**: Proprietary ML-based logic to calculate overall hireability based on multiple heuristic vectors.
-- 🛠️ **LLM Fallback System**: Seamless placeholder injection for 100% UI stability during API quota limits.
+- 🔐 **JWT Authentication**: Secure Login/Signup with persistent session management.
+- 📄 **Resume Upload & Analysis**: Instant PDF/DOCX parsing and semantic text extraction.
+- 📊 **AI-powered Dashboard**: Interactive insights with dark-themed analytics and Chart.js.
+- 🧠 **Skill Gap Detection & Roadmap**: Automated gap analysis with dynamic learning roadmaps.
+- 🤖 **AI Interview Question Generator**: Profile-specific technical evaluation using Gemini AI.
+- ⚡ **LLM Fallback System**: Professional placeholder injection to handle API quota failures.
+- 🎨 **Modern SaaS UI**: Premium Glassmorphism design with a dark, futuristic aesthetic.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend**: FastAPI (Python 3.9+), SQLite, JWT, Passlib (BCRYPT_SHA256)
-- **Frontend**: Vanilla JS (ES6+), TailwindCSS principles, Chart.js, FontAwesome
-- **AI/ML**: Google GenAI (Gemini 2.5 Flash), Scikit-Learn, NLTK
-- **DevOps**: Docker ready, Environment-based configuration, Git
-
----
-
-## 🚀 Getting Started
-
-### 1. Initial Setup
-```bash
-# Clone the repository
-git clone https://github.com/<your-username>/ai-resume-analyzer.git
-cd ai-resume-analyzer
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
-```
-
-### 2. Dependency Installation
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Environment Configuration
-Create a `.env` file in the root directory:
-```env
-GEMINI_API_KEY=your_actual_api_key_here
-JWT_SECRET=your_ultra_secure_secret_key_random_string
-```
-
-### 4. Running the Application
-```bash
-# Start the production-ready server
-uvicorn backend.main:app --reload
-```
-Navigate to `http://localhost:8000` to experience the intelligence.
+- **Backend**: FastAPI (Python)
+- **Frontend**: HTML5, Vanilla CSS, JavaScript (ES6+)
+- **Database**: SQLite3
+- **Authentication**: JWT (PyJWT) + Passlib (BCRYPT_SHA256)
+- **AI Engine**: Google Gemini API (with robust offline fallback system)
 
 ---
 
 ## 📸 Preview
-*Premium AI Dashboard with real-time analytics and dark-themed glassmorphism.*
+
+![Dashboard UI](https://via.placeholder.com/800x450/020617/ffffff?text=Dashboard+UI+Glassmorphism)
+*Premium AI Dashboard with real-time analytics.*
+
+![Login Page](https://via.placeholder.com/800x450/020617/ffffff?text=Login+Portal+Design)
+*Secure Authenticated Access Portal.*
+
+![Resume Analysis](https://via.placeholder.com/800x450/020617/ffffff?text=Resume+Analysis+Portal)
+*AI-Driven Skill Extraction & Mapping.*
 
 ---
 
-## 🛡️ Security & Stability
-- **Hashing**: Direct `passlib` patching to bypass legacy 72-byte bcrypt limits via `bcrypt_sha256`.
-- **Database**: Integrated SQLite schema auto-initialization.
-- **Error Handling**: Global JSON-mapped exception handling for zero-crash frontend experience.
+## 🚀 How to Run Locally
+
+### 1. Clone & Navigate
+```bash
+git clone https://github.com/Harsh89579/AI-Job-Candidate-Evaluation-System.git
+cd AI-Job-Candidate-Evaluation-System
+```
+
+### 2. Environment Setup
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate environment (Windows)
+venv\Scripts\activate
+```
+
+### 3. Dependency Installation
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Start the Application
+```bash
+uvicorn backend.main:app --reload
+```
+Open **http://localhost:8000** to begin.
 
 ---
 
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 🔐 Environment Variables
 
-Developed with ❤️ by [Harsh Tripathi](https://github.com/harsh89579)
+Create a `.env` file in the root directory:
+```env
+GEMINI_API_KEY=your_actual_api_key_here
+JWT_SECRET=your_custom_secure_secret_key
+```
+
+---
+
+## 📂 Project Structure
+
+```text
+backend/
+  ├── main.py       # Core API & Application Logic
+  ├── auth.py       # JWT Security & User Management
+  ├── static/       # CSS/JS Assets & Charting logic
+  ├── templates/    # UI Templates (HTML/JS)
+utils/              # AI Helpers & ML Utilities
+models/             # Pre-trained Skill Predictors
+```
+
+---
+
+## 💡 Key Highlights
+
+- **Full-Stack AI Integration**: Seamless connection between FastAPI and Google's LLM ecosystem.
+- **Production-Ready Security**: Implemented robust JWT tokenization and password hashing.
+- **Fail-Safe Reliability**: Handled real-world API rate limits with intelligent fallback logic.
+- **Stunning UX**: Designed a high-conversion, modern SaaS dashboard with 100% responsiveness.
+
+---
+
+## 🚀 Future Improvements
+
+- ☁️ **Cloud Deployment**: Migration to Render/Vercel for global availability.
+- 👥 **Multi-Tenant System**: Support for multiple HR organizations.
+- 🛠️ **Admin Control Panel**: Advanced candidate management and report exports.
+
+---
+
+## 👨‍💻 Author
+
+**Harsh Tripathi**
+[GitHub Profile](https://github.com/Harsh89579)
+
+---
+*Developed with ❤️ as a high-performance AI recruitment solution.*
 
