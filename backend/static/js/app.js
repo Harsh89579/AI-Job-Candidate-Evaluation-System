@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     if (token && window.location.pathname === '/') {
-        fetch('http://localhost:8000/auth/me', {
+        fetch('/auth/me', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         }).then(res => {
@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     insightsContainerWrap.classList.add('hidden');
 
                     try {
-                        const response = await fetch('http://localhost:8000/analyze_resume', {
+                        const response = await fetch('/analyze_resume', {
                             method: 'POST', headers: { ...getAuthHeaders() }, body: formData
                         });
                         handleAuthError(response);
@@ -603,7 +603,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let stepsData = [];
         try {
-            const res = await fetch('http://localhost:8000/skill_gap_analysis', {
+            const res = await fetch('/skill_gap_analysis', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ role: currentRole, missing_skills: missingSkills })
             });
@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
         actions.classList.add('hidden');
 
         try {
-            const res = await fetch('http://localhost:8000/start_interview', {
+            const res = await fetch('/start_interview', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({ role: currentRole, extracted_skills: skills })
             });
@@ -711,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('interviewActions').classList.add('hidden');
 
         try {
-            const res = await fetch('http://localhost:8000/evaluate_interview', {
+            const res = await fetch('/evaluate_interview', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify({
                     role: currentRole,
@@ -796,7 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 skills: latestAnalysisData.skills
             };
 
-            const res = await fetch('http://localhost:8000/generate_report', {
+            const res = await fetch('/generate_report', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                 body: JSON.stringify(payload)
             });
