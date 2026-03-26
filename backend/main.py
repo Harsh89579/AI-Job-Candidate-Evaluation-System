@@ -89,15 +89,15 @@ class EvaluationRequest(BaseModel):
 
 @app.get("/")
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
 
 @app.get("/login")
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="login.html")
 
 @app.get("/signup")
 async def signup_page(request: Request):
-    return templates.TemplateResponse("signup.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="signup.html")
 
 @app.post("/upload_resume")
 async def upload_resume(file: UploadFile = File(...)):
@@ -392,3 +392,7 @@ async def generate_report(data: dict = Body(...), current_user: dict = Depends(g
     except Exception as e:
         logger.error(f"Failed to generate PDF report: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate report")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=10000)
