@@ -8,32 +8,14 @@ import sqlite3
 import os
 from jose import jwt
 from passlib.context import CryptContext
-import passlib.handlers.bcrypt
-import bcrypt
-
-try:
-    bcrypt.__about__
-except AttributeError:
-    class _BcryptAbout:
-        __version__ = getattr(bcrypt, '__version__', '4.0.0')
-    bcrypt.__about__ = _BcryptAbout()
-
+# Password Hashing Strategy
+# We use bcrypt_sha256 to avoid the 72-byte bcrypt limit by hashing with SHA256 first.
 pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
-# Force passlib to evaluate its lazy-loaders globally into memory.
-try:
-    pwd_context.hash("dummy_init")
-except ValueError:
-    pass
-
-# NOW that the backend is permanently loaded, structurally override the bug check!
-passlib.handlers.bcrypt.detect_wrap_bug = lambda *args, **kwargs: False
 SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_ai_hr_vision_key_999") 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
 
-pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
-print(f"Active passlib schemas: {pwd_context.schemes()}")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
