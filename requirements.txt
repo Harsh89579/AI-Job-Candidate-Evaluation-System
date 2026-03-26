@@ -5,10 +5,15 @@ pypdf
 python-docx
 nltk
 scikit-learn
-pandas
 jinja2
 requests
 reportlab
 pydantic
 google-genai
 python-dotenv
+passlib[bcrypt]
+python-jose[cryptography]
+bcrypt
+httpx
+cryptography
+pandas

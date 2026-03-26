@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime, timedelta
 import sqlite3
 import os
-import jwt
+from jose import jwt
 from passlib.context import CryptContext
 import passlib.handlers.bcrypt
 import bcrypt
