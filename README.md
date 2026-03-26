@@ -65,7 +65,8 @@ The platform follows a modern decoupled architecture:
 
 ## 📸 Screenshots
 
-![Dashboard](./screenshots/dashboard.png)
+![Dashboard](<img width="1900" height="921" alt="Screenshot 2026-03-25 181205" src="https://github.com/user-attachments/assets/05f33727-ca48-414b-84d1-d74534f29fa4" />
+)
 *Modern Glassmorphic Dashboard UI with real-time analytics.*
 
 ![Login](./screenshots/login.png)
