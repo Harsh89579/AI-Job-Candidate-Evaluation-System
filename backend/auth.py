@@ -9,7 +9,10 @@ import os
 from jose import jwt
 from passlib.context import CryptContext
 # Password Hashing Strategy
-# We use bcrypt_sha256 to avoid the 72-byte bcrypt limit by hashing with SHA256 first.
+import passlib.handlers.bcrypt
+# Force passlib to ignore the bcrypt wrap bug which causes issues in modern versions
+passlib.handlers.bcrypt.detect_wrap_bug = lambda *args, **kwargs: False
+
 pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_ai_hr_vision_key_999") 

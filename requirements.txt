@@ -11,9 +11,9 @@ reportlab
 pydantic
 google-genai
 python-dotenv
-passlib[bcrypt]
+passlib[bcrypt]==1.7.4
 python-jose[cryptography]
-bcrypt
+bcrypt==4.0.1
 httpx
 cryptography
 pandas
